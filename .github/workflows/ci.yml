@@ -44,8 +44,13 @@ jobs:
           BOOTSTRAP_SLUG: browser-smoke
           BOOTSTRAP_NAME: Browser Smoke
           BOOTSTRAP_PASSWORD: CI-only-test-password-2026
+          PLATFORM_ADMIN_ENABLED: 'true'
+          PLATFORM_BOOTSTRAP_EMAIL: platform-smoke@example.invalid
+          PLATFORM_BOOTSTRAP_PASSWORD: CI-only-platform-test-password
+          HUB_INTEGRATION_TOKEN: CI-only-hub-test-token-not-production-12345
         run: |
           node scripts/bootstrap.mjs
+          node scripts/bootstrap-platform.mjs
           npm run start -- --hostname localhost > /tmp/onlymarket-next.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:3000/api/health; then break; fi
