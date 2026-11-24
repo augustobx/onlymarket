@@ -37,3 +37,49 @@ jobs:
         env:
           RUN_DB_TESTS: '1'
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser acceptance smoke
+        env:
+          BOOTSTRAP_EMAIL: browser-smoke@example.invalid
+          BOOTSTRAP_SLUG: browser-smoke
+          BOOTSTRAP_NAME: Browser Smoke
+          BOOTSTRAP_PASSWORD: CI-only-test-password-2026
+        run: |
+          node scripts/bootstrap.mjs
+          npm run start -- --hostname localhost > /tmp/onlymarket-next.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/api/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/api/health
+          npm run test:browser || { cat /tmp/onlymarket-next.log; exit 1; }
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated compose stack
+        run: |
+          umask 077
+          printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
+          docker network create proxy
+          docker compose config -q
+          docker compose up -d --wait db
+          docker compose build app
+          docker compose run --rm app npm run db:deploy
+          docker compose up -d --wait app
+          docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1);return r.text()}).then(console.log)"
+      - name: Backup and isolated restore
+        run: |
+          docker compose exec -T db psql -U onlymarket -d onlymarket -v ON_ERROR_STOP=1 -c 'INSERT INTO "Tenant" ("id","name","slug") VALUES ('"'"'ci-restore'"'"','"'"'CI restore'"'"','"'"'ci-restore'"'"');'
+          dump="$(sh scripts/backup.sh /tmp/onlymarket-ci-backups)"
+          docker compose exec -T db createdb -U onlymarket onlymarket_restore
+          docker compose exec -T db pg_restore -U onlymarket -d onlymarket_restore --exit-on-error < "$dump"
+          test "$(docker compose exec -T db psql -U onlymarket -d onlymarket_restore -Atc 'SELECT count(*) FROM "Tenant" WHERE "id" = '"'"'ci-restore'"'"';')" = 1
+      - name: Diagnostics and disposable CI cleanup
+        if: always()
+        run: |
+          docker compose ps || true
+          docker compose logs --tail=80 app || true
+          docker compose down -v || true
+          docker network rm proxy || true

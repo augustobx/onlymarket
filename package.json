@@ -13,7 +13,8 @@
     "start": "next start",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "test:browser": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -26,6 +27,7 @@
     "typescript": "^5.9.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "playwright": "^1.51.1"
   }
 }
