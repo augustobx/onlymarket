@@ -13,10 +13,10 @@ docker network inspect proxy >/dev/null
 docker compose config -q
 docker compose up -d --wait db
 docker compose build app
-# Back up even a newly provisioned database, before migrations.
-sh scripts/backup.sh /opt/backups/onlymarket
-# Maintenance window for schema changes; no other compose projects are touched.
+# Maintenance window: stop writes before the pre-migration backup.
+# No other compose projects are touched.
 docker compose stop app
+sh scripts/backup.sh /opt/backups/onlymarket
 docker compose run --rm app npm run db:deploy
 docker compose up -d --wait app
 docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1);return r.text()}).then(console.log).catch(()=>process.exit(1))"
