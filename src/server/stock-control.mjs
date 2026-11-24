@@ -39,6 +39,7 @@ export async function stockControl(prisma,s,input){
    if(addedCost!==null)throw new Error("No ingreses costo para un faltante");
    cost=consumeCost(before,lot.remainingCostCents,abs);
   }else if(delta>0n){
+   if(before===0n||lot.status==="EXHAUSTED")throw new Error("No se puede reactivar un lote agotado; registrá una recepción documentada");
    if(addedCost===null)throw new Error("Ingresá costo total documentado del sobrante");
    cost=addedCost;status=lot.status==="BLOCKED"?"BLOCKED":"REVIEW";
   }else if(addedCost!==null)throw new Error("No ingreses costo si no hay diferencia");

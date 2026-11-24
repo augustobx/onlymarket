@@ -5,3 +5,5 @@
 - El código derivado se vincula al lote origen en trazabilidad. Una promoción exclusiva del lote original no se copia; las promociones de producto siguen sus reglas.
 - Reposición: mínimo y objetivo por producto/sucursal. Cuenta únicamente inventario apto, incluyendo próximos a vencer todavía aptos; muestra separado el retenido. Sugiere cantidad hasta el objetivo si cae por debajo del mínimo. No crea pedidos ni genera notificaciones push.
 - Pruebas de integración verifican faltantes, sobrantes, costo y peso conservados, idempotencia, rechazo de snapshots desactualizados, aislamiento y límites de reposición.
+
+Los lotes agotados no se pueden reactivar mediante conteo. Finanzas desglosa el costo de faltantes del resto de mermas; los sobrantes valorizados se informan por separado sin sumarlos a ventas o contribución.
