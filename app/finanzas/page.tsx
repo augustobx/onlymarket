@@ -12,18 +12,20 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
  const today=localDay();let from=query.from??today.slice(0,7)+"-01",to=query.to??today;
  let range;try{range=periodBounds(from,to);}catch{from=today.slice(0,7)+"-01";to=today;range=periodBounds(from,to);query.error="Período inválido; se muestra el mes actual.";}
  const where={tenantId:s.tenantId},time={gte:range.start,lt:range.end},dates={gte:range.fromDate,lte:range.toDate};
- const [sales,losses,expenses,purchases,payments,suppliers,allPurchases,allPayments,recentExpenses,recentPayments]=await db.$transaction([
- db.sale.aggregate({where:{...where,createdAt:time},_sum:{totalCents:true,costCents:true}}),
- db.stockMovement.groupBy({by:["kind"],where:{...where,createdAt:time,kind:{in:["WASTE","GIFT"]}},_sum:{deltaCostCents:true}}),
- db.expense.aggregate({where:{...where,occurredOn:dates},_sum:{amountCents:true}}),
- db.receipt.aggregate({where:{...where,createdAt:time},_sum:{totalCostCents:true}}),
- db.supplierPayment.aggregate({where:{...where,occurredOn:dates},_sum:{amountCents:true}}),
- db.supplier.findMany({where,orderBy:{name:"asc"}}),
- db.receipt.groupBy({by:["supplierId"],where,_sum:{totalCostCents:true}}),
- db.supplierPayment.groupBy({by:["supplierId"],where,_sum:{amountCents:true}}),
- db.expense.findMany({where:{...where,occurredOn:dates},orderBy:[{occurredOn:"desc"},{createdAt:"desc"}],take:100}),
- db.supplierPayment.findMany({where:{...where,occurredOn:dates},include:{supplier:true},orderBy:[{occurredOn:"desc"},{createdAt:"desc"}],take:100})
- ],{isolationLevel:"RepeatableRead"});
+ const [sales,losses,expenses,purchases,payments,suppliers,allPurchases,allPayments,recentExpenses,recentPayments]=await db.$transaction(async tx=>{
+ return Promise.all([
+ tx.sale.aggregate({where:{...where,createdAt:time},_sum:{totalCents:true,costCents:true}}),
+ tx.stockMovement.groupBy({by:["kind"],orderBy:{kind:"asc"},where:{...where,createdAt:time,kind:{in:["WASTE","GIFT"]}},_sum:{deltaCostCents:true}}),
+ tx.expense.aggregate({where:{...where,occurredOn:dates},_sum:{amountCents:true}}),
+ tx.receipt.aggregate({where:{...where,createdAt:time},_sum:{totalCostCents:true}}),
+ tx.supplierPayment.aggregate({where:{...where,occurredOn:dates},_sum:{amountCents:true}}),
+ tx.supplier.findMany({where,orderBy:{name:"asc"}}),
+ tx.receipt.groupBy({by:["supplierId"],orderBy:{supplierId:"asc"},where,_sum:{totalCostCents:true}}),
+ tx.supplierPayment.groupBy({by:["supplierId"],orderBy:{supplierId:"asc"},where,_sum:{amountCents:true}}),
+ tx.expense.findMany({where:{...where,occurredOn:dates},orderBy:[{occurredOn:"desc"},{createdAt:"desc"}],take:100}),
+ tx.supplierPayment.findMany({where:{...where,occurredOn:dates},include:{supplier:true},orderBy:[{occurredOn:"desc"},{createdAt:"desc"}],take:100})
+ ] as const);
+ },{isolationLevel:"RepeatableRead"});
  const salesTotal=sales._sum.totalCents??0n,cost=sales._sum.costCents??0n,waste=-(losses.find(x=>x.kind==="WASTE")?._sum.deltaCostCents??0n),gifts=-(losses.find(x=>x.kind==="GIFT")?._sum.deltaCostCents??0n),expense=expenses._sum.amountCents??0n;
  const report=summarizeFinance({sales:salesTotal,costOfSales:cost,waste,gifts,expenses:expense,purchases:purchases._sum.totalCostCents??0n,payments:payments._sum.amountCents??0n});
  const bought=new Map(allPurchases.map(x=>[x.supplierId,x._sum.totalCostCents??0n])),paid=new Map(allPayments.map(x=>[x.supplierId,x._sum.amountCents??0n]));
