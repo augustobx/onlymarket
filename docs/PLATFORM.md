@@ -1,0 +1,7 @@
+# NanoLabs platform access
+- Platform identities are separate from commerce users. No impersonation, cross-tenant data browser or self-registration.
+- Create the initial account via `node scripts/bootstrap-platform.mjs` inside the app container using temporary environment variables PLATFORM_BOOTSTRAP_EMAIL and PLATFORM_BOOTSTRAP_PASSWORD (min 12 chars; use a long random password). Do not commit credentials or put them in shell history.
+- Enable PLATFORM_ADMIN_ENABLED=true in the runtime env and recreate only the OnlyMarket app. HTTPS required. Access /superadmin/login. Global and per-account login throttling, 4-hour session, separate cookie, audit of tenant creation.
+- Tenant creation, listing and counts only. No tenant deletion, subscription billing, plan management, suspension or password reset in this increment. Existing commerce users cannot create platform sessions.
+- Hub GET /api/integrations/nanolabs/tenants?offset=0 implements nanolabs.saas.tenants.v1, product onlymarket. Runtime HUB_INTEGRATION_TOKEN must be a unique random token at least 32 bytes. Missing/invalid token returns 401, no write handlers, no user emails or financial records. Since no suspension state exists, all created tenants are ACTIVE and plan null.
+- Hub needs a separately reviewed addition to its product taxonomy/types and environment configuration HUB_INTEGRATION_ONLYMARKET_TOKEN and explicit onlymarket opt-in. No Hub changes or deployments in this PR.

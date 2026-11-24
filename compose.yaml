@@ -22,6 +22,8 @@ services:
     environment:
       DATABASE_URL: postgresql://onlymarket:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/onlymarket
       TZ: America/Argentina/Buenos_Aires
+      PLATFORM_ADMIN_ENABLED: ${PLATFORM_ADMIN_ENABLED:-false}
+      HUB_INTEGRATION_TOKEN: ${HUB_INTEGRATION_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
