@@ -8,6 +8,19 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: onlymarket
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: onlymarket
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://onlymarket:test@localhost:5432/onlymarket
     steps:
@@ -16,6 +29,9 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - run: npm test
       - run: npm run db:validate
+      - run: npx prisma db push
+      - run: npm test
+        env:
+          RUN_DB_TESTS: '1'
       - run: npm run build

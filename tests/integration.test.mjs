@@ -1,0 +1,76 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
+import {PrismaClient} from "@prisma/client";
+import {receiveLot} from "../src/server/receipts.mjs";
+import {transformLot} from "../src/server/transform.mjs";
+import {openShift,recordSale,closeShift} from "../src/server/sales.mjs";
+import {lotOperation} from "../src/server/lot-operations.mjs";
+import {recordFinance} from "../src/server/finance.mjs";
+import {localDay} from "../src/domain/parse.mjs";
+const key=()=>randomUUID();
+test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aislamiento",{skip:process.env.RUN_DB_TESTS!=="1"},async()=>{
+ const db=new PrismaClient();
+ try{
+  // A fresh disposable CI database is mandatory. No deletes against existing records.
+  const makeTenant=async()=>{
+   const tenant=await db.tenant.create({data:{name:"Integration "+key(),slug:key()}});
+   const user=await db.user.create({data:{email:key()+"@example.invalid",passwordHash:"not-a-login"}});
+   await db.membership.create({data:{tenantId:tenant.id,userId:user.id,role:"OWNER"}});
+   const branch=await db.branch.create({data:{tenantId:tenant.id,name:"Central"}});
+   return {tenantId:tenant.id,actorUserId:user.id,branchId:branch.id};
+  };
+  const s=await makeTenant(),other=await makeTenant(),tenantId=s.tenantId;
+  const product=async(name,price)=>db.product.create({data:{tenantId,sku:key(),name,unit:"KG",sector:"BUTCHERY",salePriceCents:price,openedLifeDays:2}});
+  const source=await product("Media res",0n),cut=await product("Corte",120000n);
+  const supplier=await db.supplier.create({data:{tenantId,name:"Proveedor"}});
+  const future=new Date(Date.now()+10*86400000),expiresOn=localDay(future);
+  const receive={branchId:s.branchId,productId:source.id,supplierId:supplier.id,code:key(),requestKey:key(),quantity:"10",cost:"10000",expiresOn,invoiceRef:"Test"};
+  const receipt=await receiveLot(db,s,receive);
+  assert.equal((await receiveLot(db,s,receive)).id,receipt.id);
+  await assert.rejects(receiveLot(db,other,{...receive,requestKey:key(),branchId:other.branchId}));
+  const batchInput={branchId:s.branchId,sourceLotId:receipt.lotId,requestKey:key(),inputMilli:"10000",outputs:[
+   {productId:cut.id,quantityMilli:"8000",disposition:"STOCK",reason:"Cortes"},
+   {quantityMilli:"1000",disposition:"GIFT",reason:"Huesos"},
+   {quantityMilli:"1000",disposition:"WASTE",reason:"Merma"}]};
+  const batch=await transformLot(db,s,batchInput);
+  assert.equal((await transformLot(db,s,batchInput)).id,batch.id);
+  const lot=batch.outputs[0];
+  assert.equal(lot.remainingCostCents,800000n);
+  assert.equal(lot.status,"REVIEW");
+  await db.lot.update({where:{tenantId_id:{tenantId,id:lot.id}},data:{status:"AVAILABLE"}});
+  const shift=await openShift(db,s,{branchId:s.branchId,opening:"100"});
+  await assert.rejects(openShift(db,s,{branchId:s.branchId,opening:"0"}));
+  await db.promotion.create({data:{tenantId,productId:cut.id,lotId:lot.id,name:"Promo",discountBps:1000,startsOn:new Date(localDay()+"T00:00:00Z"),endsOn:new Date(expiresOn+"T00:00:00Z")}});
+  const saleInput={shiftId:shift.id,requestKey:key(),payment:"CASH",tendered:"3000",quotedTotal:"2160",lines:[{lotId:lot.id,quantity:"2"}]};
+  const sale=await recordSale(db,s,saleInput);
+  assert.equal(sale.costCents,200000n);
+  assert.equal(sale.changeCents,84000n);
+  assert.equal((await recordSale(db,s,saleInput)).id,sale.id);
+  await assert.rejects(recordSale(db,other,{...saleInput,requestKey:key()}));
+  await assert.rejects(recordSale(db,s,{...saleInput,requestKey:key(),quotedTotal:"1"}));
+  const competing=()=>recordSale(db,s,{...saleInput,requestKey:key(),payment:"TRANSFER",quotedTotal:"4320",lines:[{lotId:lot.id,quantity:"4"}]});
+  const attempts=await Promise.allSettled([competing(),competing()]);
+  assert.equal(attempts.filter(x=>x.status==="fulfilled").length,1);
+  assert.equal((await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:lot.id}}})).quantityMilli,2000n);
+  const wasteInput={lotId:lot.id,requestKey:key(),reason:"Merma adicional",kind:"WASTE",quantity:"1"};
+  const waste=await lotOperation(db,s,wasteInput);
+  assert.equal(waste.costCents,100000n);
+  assert.equal((await lotOperation(db,s,wasteInput)).id,waste.id);
+  const opening=await lotOperation(db,s,{lotId:lot.id,requestKey:key(),reason:"Apertura",kind:"OPEN"});
+  assert.equal(opening.kind,"OPEN");
+  const opened=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:lot.id}}});
+  assert.ok(opened.openedAt);
+  assert.ok(opened.expiresOn<=new Date(expiresOn+"T00:00:00Z"));
+  const closed=await closeShift(db,s,{shiftId:shift.id,counted:"2260"});
+  assert.equal(closed.expectedCents,226000n);
+  await assert.rejects(recordSale(db,s,{...saleInput,requestKey:key()}));
+  const expense=await recordFinance(db,s,{requestKey:key(),date:localDay(),amount:"100",category:"Luz",description:"Test"},"EXPENSE");
+  assert.equal(expense.amountCents,10000n);
+  const payment=await recordFinance(db,s,{requestKey:key(),date:localDay(),amount:"5000",supplierId:supplier.id,payment:"TRANSFER"},"PAYMENT");
+  assert.equal(payment.amountCents,500000n);
+  const movements=await db.stockMovement.findMany({where:{tenantId,lotId:lot.id}});
+  assert.equal(movements.reduce((a,m)=>a+m.deltaMilli,0n),opened.quantityMilli);
+  assert.equal(movements.reduce((a,m)=>a+m.deltaCostCents,0n),opened.remainingCostCents);
+ }finally{await db.$disconnect();}
+});
