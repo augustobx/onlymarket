@@ -1,0 +1,423 @@
+.bhi {
+  --bhi-primario: #ff6600;
+  --bhi-primario-bold: #e25700;
+  --bhi-primario-subtle: #ffad75;
+  --bhi-primario-subtlest: #fff4ea;
+  --bhi-superficie: #ffffff;
+  --bhi-texto: #1e293b;
+  --bhi-texto-subtle: #475569;
+  --bhi-texto-subtlest: #64748b;
+  --bhi-borde-subtle: #e2e8f0;
+  --bhi-borde-muted: #cbd5e1;
+  --bhi-danger: #ad1b2d;
+  --bhi-danger-subtlest: #fef2f2;
+  --bhi-danger-on: #991b1b;
+  --bhi-info: #2563eb;
+  --bhi-info-subtlest: #eff6ff;
+  --bhi-info-on: #1e40af;
+  --bhi-radio: 16px;
+  --bhi-curva: cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--bhi-texto);
+}
+
+.bh2 {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #0d0501;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.bh2-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(38% 46% at 28% 48%, rgba(255, 102, 0, 0.28) 0%, rgba(190, 75, 4, 0) 72%),
+    radial-gradient(90% 80% at 38% 45%, rgba(50, 18, 1, 0.9) 0%, rgba(50, 18, 1, 0) 75%),
+    #0d0501;
+}
+
+.bh2-lienzo {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+.bh2-vineta {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 40% 50%, rgba(8, 3, 0, 0) 50%, rgba(8, 3, 0, 0.7) 100%);
+}
+
+.bh2-arriba {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 44px;
+  pointer-events: none;
+}
+
+.bh2-marca__area {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.bh3-nombre {
+  position: relative;
+  z-index: 2;
+  padding: 24px 44px 0;
+  pointer-events: none;
+  animation: bh3-fade 0.8s var(--bhi-curva) both;
+}
+
+.bh3-nombre__titulo {
+  margin: 0;
+  font-family: "Poppins", "Inter", system-ui, sans-serif;
+  font-size: clamp(38px, 5.5vw, 76px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  filter: drop-shadow(0 0 28px rgba(255, 102, 0, 0.45));
+}
+
+.bh3-nombre__bajada {
+  margin: 12px 0 0;
+  max-width: 30rem;
+  font-size: 17px;
+  line-height: 25px;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 2px 16px rgba(13, 5, 1, 0.95), 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.bh2-tarjeta {
+  position: relative;
+  z-index: 3;
+  margin: 24px auto 28px;
+  width: min(460px, calc(100% - 32px));
+  border-radius: var(--bhi-radio);
+  background: var(--bhi-superficie);
+  color: var(--bhi-texto);
+  border: 1px solid var(--bhi-borde-subtle);
+  outline: 1px solid rgba(249, 191, 143, 0.35);
+  outline-offset: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  animation: bh3-card-in 0.55s var(--bhi-curva) both;
+}
+
+.bh2-tarjeta__cuerpo {
+  padding: 32px 36px 18px;
+}
+
+.bh2-tarjeta__cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bh2-tarjeta__tile {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ff8a2b, #e25700);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(243, 115, 32, 0.35);
+  flex-shrink: 0;
+}
+
+.bh2-tarjeta__brand {
+  margin: 0;
+  font-family: "Poppins", "Inter", system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.bh2-tarjeta__subbrand {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.bh2-tarjeta__titulo {
+  margin: 8px 0 4px;
+  font-family: "Poppins", "Inter", system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bh2-tarjeta__bajada {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--bhi-texto-subtle);
+}
+
+.bhi-campo {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.bhi-etiqueta {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bhi-texto-subtle);
+}
+
+.bhi-input-contenedor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.bhi-input-icono {
+  position: absolute;
+  left: 14px;
+  pointer-events: none;
+  color: #94a3b8;
+  display: inline-flex;
+}
+
+.bhi-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px 0 42px;
+  border-radius: 12px;
+  border: 1px solid var(--bhi-borde-muted);
+  background: #ffffff;
+  font-size: 14px;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.bhi-input:focus {
+  border-color: var(--bhi-primario);
+  box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.18);
+}
+
+.bhi-boton--primario {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 48px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ff7a1f, #e25700);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(226, 87, 0, 0.35);
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.bhi-boton--primario:hover {
+  filter: brightness(1.04);
+}
+
+.bhi-boton--primario:active {
+  transform: scale(0.99);
+}
+
+.bhi-boton--primario::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -50%;
+  width: 35%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+  animation: bhi-brillo 4.5s ease-in-out 1s infinite;
+}
+
+.bhi-alerta {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.bhi-alerta--danger {
+  background: var(--bhi-danger-subtlest);
+  border-color: #fecaca;
+  color: var(--bhi-danger-on);
+}
+
+.bhi-alerta--info {
+  background: var(--bhi-info-subtlest);
+  border-color: #bfdbfe;
+  color: var(--bhi-info-on);
+}
+
+.bh2-seguro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--bhi-texto-subtlest);
+}
+
+.bh2-tarjeta__pie {
+  padding: 16px 36px 24px;
+  font-size: 12px;
+  color: var(--bhi-texto-subtlest);
+  border-top: 1px solid var(--bhi-borde-subtle);
+  text-align: center;
+}
+
+.bh2-tarjeta__pie a {
+  color: #e25700;
+  font-weight: 600;
+}
+
+.bh2-relato {
+  position: relative;
+  z-index: 2;
+  padding: 0 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.bh2-nanolabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+}
+
+.bh2-nanolabs strong {
+  color: #ffffff;
+}
+
+.bh2-pie {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@media (min-width: 1024px) {
+  .bh2 {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .bh2-arriba {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 32px 48px;
+  }
+  .bh3-nombre {
+    position: absolute;
+    left: 48px;
+    top: 46%;
+    transform: translateY(-50%);
+    max-width: 44%;
+    padding: 0;
+  }
+  .bh2-tarjeta {
+    position: absolute;
+    left: 74%;
+    top: 50%;
+    width: 460px;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    animation: bh3-card-desktop 0.55s var(--bhi-curva) both;
+  }
+  .bh2-relato {
+    position: absolute;
+    left: 48px;
+    bottom: 28px;
+    padding: 0;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 1023px) {
+  .bh2-arriba {
+    padding: 20px 24px 0;
+  }
+  .bh3-nombre {
+    padding: 20px 24px 0;
+  }
+  .bh2-tarjeta__cuerpo {
+    padding: 24px 22px 16px;
+  }
+  .bh2-tarjeta__pie {
+    padding: 14px 22px 20px;
+  }
+}
+
+@keyframes bhi-brillo {
+  0% { left: -60%; }
+  45%, 100% { left: 130%; }
+}
+
+@keyframes bh3-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes bh3-card-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes bh3-card-desktop {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bh2 *, .bh2 *::before, .bh2 *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
