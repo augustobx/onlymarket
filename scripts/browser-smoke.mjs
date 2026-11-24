@@ -143,7 +143,7 @@ try{
  await page.getByLabel("Transferencia asignada").fill("4000");
  await page.getByLabel("Efectivo recibido").fill("1200");
  await page.getByRole("button",{name:"Confirmar venta"}).click();
- await page.getByRole("status").waitFor();
+ await page.getByRole("status").filter({hasText:"Venta registrada"}).waitFor();
  const offeredSale=await db.sale.findFirstOrThrow({where:{tenantId:tenant.id,payment:"MIXED"},include:{lines:true}});
  assert.equal(offeredSale.totalCents,500000n);assert.equal(offeredSale.cashCents,100000n);assert.equal(offeredSale.transferCents,400000n);assert.equal(offeredSale.changeCents,20000n);assert.equal(offeredSale.lines[0].promotionLabel,"3x2 smoke");
  await page.goto(base+"/superadmin");
@@ -223,7 +223,7 @@ try{
  assert.match(await page.locator(".total").innerText(),/3925,00/);
  await page.locator('select[name="payment"]').selectOption("TRANSFER");
  await page.getByRole("button",{name:"Confirmar venta"}).click();
- await page.getByRole("status").waitFor();
+ await page.getByRole("status").filter({hasText:"Venta registrada"}).waitFor();
  const memberSale=await db.sale.findFirstOrThrow({where:{tenantId:tenant.id,customerId:member.id},include:{lines:true}});
  assert.equal(memberSale.totalCents,392500n);assert.ok(memberSale.lines.some(l=>l.quantityMilli===750n));assert.ok(memberSale.lines.some(l=>l.promotionLabel==="Combo smoke"));
  await page.goto(base+"/clientes");
@@ -255,7 +255,7 @@ try{
  await licenseRow.getByLabel("Plan",{exact:true}).selectOption("PRO");
  await licenseRow.getByLabel("Suspender acceso").check();
  await licenseRow.getByRole("button",{name:"Guardar licencia"}).click();
- await page.getByRole("status").waitFor();
+ await page.getByRole("status").filter({hasText:"Licencia actualizada"}).waitFor();
  const licensed=await db.tenant.findUniqueOrThrow({where:{id:second.id}});assert.equal(licensed.plan,"PRO");assert.equal(licensed.suspended,true);
  const endpoint=base+"/api/integrations/nanolabs/tenants";
  assert.equal((await fetch(endpoint)).status,401);

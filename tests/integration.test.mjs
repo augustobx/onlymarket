@@ -189,5 +189,41 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   const movements=await db.stockMovement.findMany({where:{tenantId,lotId:lot.id}});
   assert.equal(movements.reduce((a,m)=>a+m.deltaMilli,0n),opened.quantityMilli);
   assert.equal(movements.reduce((a,m)=>a+m.deltaCostCents,0n),opened.remainingCostCents);
+
+  // Regression: expired, blocked, and review lots cannot be sold or transformed; expired license blocks writes.
+  const today=localDay();
+  const pastLot=await db.lot.create({data:{tenantId,branchId:s.branchId,productId:packaged.id,supplierId:supplier.id,code:key(),quantityMilli:2000n,remainingCostCents:2000n,expiresOn:new Date(today+"T00:00:00Z"),status:"AVAILABLE"}});
+  const blockedLot=await db.lot.create({data:{tenantId,branchId:s.branchId,productId:packaged.id,supplierId:supplier.id,code:key(),quantityMilli:2000n,remainingCostCents:2000n,status:"BLOCKED"}});
+  const reviewLot=await db.lot.create({data:{tenantId,branchId:s.branchId,productId:packaged.id,supplierId:supplier.id,code:key(),quantityMilli:2000n,remainingCostCents:2000n,status:"REVIEW"}});
+  const guardReceipt=await receiveLot(db,s,{...receive,productId:packaged.id,code:key(),requestKey:key(),invoiceRef:"Guard",quantity:"4",cost:"160",expiresOn});
+  const guardShift=await openShift(db,s,{branchId:s.branchId,opening:"0"});
+  for(const bad of [pastLot,blockedLot,reviewLot]){
+   await assert.rejects(recordSale(db,s,{shiftId:guardShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"100",lines:[{lotId:bad.id,quantity:"1"}]}),/no apto/i);
+  }
+  // Regression: expired license blocks sales and inventory operations.
+  const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  await db.tenant.update({where:{id:tenantId},data:{licenseUntil:new Date(yesterday+"T00:00:00Z")}});
+  await assert.rejects(recordSale(db,s,{shiftId:guardShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"100",lines:[{lotId:guardReceipt.lotId,quantity:"1"}]}),/Sin permisos/);
+  await assert.rejects(receiveLot(db,s,{...receive,code:key(),requestKey:key()}),/Sin permisos/);
+  await db.tenant.update({where:{id:tenantId},data:{licenseUntil:null}});
+  await closeShift(db,s,{shiftId:guardShift.id,counted:"0"});
+
+  // Regression: loyalty points subtract cancellations and partial returns; cross-tenant writes are rejected.
+  const ptsShift=await openShift(db,s,{branchId:s.branchId,opening:"0"});
+  const ptsSale=await recordSale(db,s,{shiftId:ptsShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"200",customerId:member.id,lines:[{lotId:guardReceipt.lotId,quantity:"3"}]});
+  const ptsLine=await db.saleLine.findFirstOrThrow({where:{tenantId,saleId:ptsSale.id}});
+  await recordReturn(db,s,{saleId:ptsSale.id,saleLineId:ptsLine.id,shiftId:ptsShift.id,requestKey:key(),quantity:"1",quoted:"66.67",parts:{transferCents:"66.67"},reason:"Parcial puntos",disposition:"REVIEW",confirm:"yes"});
+  const cancelledPtsSale=await recordSale(db,s,{shiftId:ptsShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"90",customerId:member.id,lines:[{lotId:guardReceipt.lotId,quantity:"1"}]});
+  await cancelSale(db,s,{saleId:cancelledPtsSale.id,requestKey:key(),reason:"Anulación puntos",disposition:"WASTE",confirm:"yes"});
+  const loyaltyStats=await db.$queryRaw`
+   WITH refunds AS (SELECT "saleId",SUM("refundCents") AS amount FROM "SaleReturn" WHERE "tenantId"=${tenantId} GROUP BY "saleId"),
+   net AS (SELECT s."customerId",s."totalCents"-COALESCE(r.amount,0) AS amount,s."pointsRateCents" AS rate FROM "Sale" s LEFT JOIN refunds r ON r."saleId"=s.id LEFT JOIN "SaleCancellation" c ON c."tenantId"=s."tenantId" AND c."saleId"=s.id WHERE s."tenantId"=${tenantId} AND s."customerId"=${member.id} AND c.id IS NULL)
+   SELECT COALESCE(SUM(amount),0)::bigint net,COALESCE(SUM(FLOOR(amount/NULLIF(rate,0))),0)::bigint points FROM net`;
+  assert.equal(loyaltyStats[0].net,33333n);
+  assert.equal(loyaltyStats[0].points,3n);
+  await assert.rejects(lotOperation(db,other,{lotId:guardReceipt.lotId,requestKey:key(),kind:"WASTE",quantity:"1",reason:"Cross-tenant"}));
+  await assert.rejects(transformLot(db,other,{branchId:s.branchId,sourceLotId:lot.id,requestKey:key(),inputMilli:"1000",outputs:[{quantityMilli:"1000",disposition:"WASTE",reason:"Cross"}]}));
+  await assert.rejects(recordFinance(db,other,{requestKey:key(),date:today,amount:"10",supplierId:supplier.id,payment:"CASH"},"PAYMENT"));
+  await closeShift(db,s,{shiftId:ptsShift.id,counted:"0"});
  }finally{await db.$disconnect();}
 });
