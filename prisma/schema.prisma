@@ -301,6 +301,7 @@ model SaleLine {
   costCents BigInt
   discountBps Int
   promotionId String?
+  promotionLabel String?
   sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
@@ -314,6 +315,9 @@ model Promotion {
   lotId String?
   name String
   discountBps Int
+  minimumMilli BigInt?
+  buyUnits Int?
+  payUnits Int?
   expiryWithinDays Int?
   startsOn DateTime @db.Date
   endsOn DateTime @db.Date

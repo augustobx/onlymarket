@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {priceLine,bestPromotion,paymentAmounts} from "../src/domain/sales.mjs";
+import {priceLine,bestPromotion,paymentAmounts,quotePromotion,eligiblePromotions} from "../src/domain/sales.mjs";
 test("precio exacto por peso y descuento",()=>{
  assert.deepEqual(priceLine(123456n,125n,2000),{subtotal:15432n,total:12346n});
  assert.throws(()=>priceLine(10n,0n));assert.throws(()=>priceLine(10n,1000n,10000));
@@ -18,4 +18,20 @@ test("efectivo y medios no efectivo",()=>{
  assert.deepEqual(paymentAmounts(500n,"CASH",1000n),{tenderedCents:1000n,changeCents:500n});
  assert.throws(()=>paymentAmounts(500n,"CASH",499n));
  assert.deepEqual(paymentAmounts(500n,"TRANSFER",null),{tenderedCents:null,changeCents:null});
+});
+
+test("ofertas por cantidad, NxM, resto de unidades y mejor ahorro",()=>{
+ const bundle={id:"b",name:"3x2",discountBps:0,buyUnits:3,payUnits:2};
+ const threshold={id:"t",name:"Por cantidad",discountBps:2000,minimumMilli:"3000"};
+ const percent={id:"p",name:"10%",discountBps:1000};
+ assert.equal(quotePromotion(1000n,2000n,"UNIT",[bundle,threshold,percent]).total,1800n);
+ assert.equal(quotePromotion(1000n,3000n,"UNIT",[bundle,threshold,percent]).total,2000n);
+ assert.equal(quotePromotion(1000n,4000n,"UNIT",[bundle,threshold,percent]).total,3000n);
+ assert.equal(quotePromotion(1000n,7000n,"UNIT",[bundle,threshold,percent]).total,5000n);
+ assert.equal(quotePromotion(1000n,3000n,"KG",[bundle,threshold,percent]).total,2400n);
+ assert.equal(quotePromotion(1000n,3000n,"UNIT",[bundle,{...percent,discountBps:5000}]).promotionId,"p");
+ assert.equal(quotePromotion(1000n,3000n,"UNIT",[{...bundle,payUnits:4}]).total,3000n);
+ const scoped={...bundle,active:true,productId:"p",lotId:"a",startsOn:"2026-11-20",endsOn:"2026-11-30",expiryWithinDays:2};
+ assert.equal(eligiblePromotions([scoped],{id:"a",productId:"p",expiresOn:"2026-11-26"},"2026-11-24").length,1);
+ assert.equal(eligiblePromotions([scoped],{id:"b",productId:"p",expiresOn:"2026-11-26"},"2026-11-24").length,0);
 });

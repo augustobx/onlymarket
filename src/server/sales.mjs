@@ -1,7 +1,7 @@
 import {createHash} from "node:crypto";
 import {decimal,textField,localDay} from "../domain/parse.mjs";
 import {consumeCost,classifyLot} from "../domain/inventory.mjs";
-import {bestPromotion,priceLine,paymentAmounts,checked} from "../domain/sales.mjs";
+import {eligiblePromotions,quotePromotion,paymentAmounts,checked} from "../domain/sales.mjs";
 const dayOnly=d=>d?.toISOString().slice(0,10)??null;
 const roles=["OWNER","MANAGER","CASHIER"];
 export async function authorizeSale(tx,s,allowed=roles){
@@ -60,19 +60,19 @@ export async function recordSale(prisma,s,input){
    if(!["AVAILABLE","EXPIRING"].includes(classifyLot({...info,today})))throw new Error("Lote no apto para venta");
    const costCents=consumeCost(lot.quantityMilli,lot.remainingCostCents,quantityMilli);
    const promos=await tx.promotion.findMany({where:{tenantId,productId:lot.productId,active:true}});
-   const promo=bestPromotion(promos.map(p=>({...p,startsOn:dayOnly(p.startsOn),endsOn:dayOnly(p.endsOn)})),info,today);
-   const price=priceLine(lot.product.salePriceCents,quantityMilli,promo?.discountBps??0);
-   items.push({lot,quantityMilli,costCents,price,promo});
+   const eligible=eligiblePromotions(promos.map(p=>({...p,startsOn:dayOnly(p.startsOn),endsOn:dayOnly(p.endsOn)})),info,today);
+   const price=quotePromotion(lot.product.salePriceCents,quantityMilli,lot.product.unit,eligible);
+   items.push({lot,quantityMilli,costCents,price});
   }
   const sum=fn=>checked(items.reduce((a,l)=>a+fn(l),0n));
   const totalCents=sum(l=>l.price.total);
   if(totalCents!==quoted)throw new Error("El precio cambió. Revisá y confirmá nuevamente.");
   const paid=paymentAmounts(totalCents,payment,tendered);
   const sale=await tx.sale.create({data:{tenantId,shiftId,actorId:s.actorUserId,requestKey,requestHash,payment,totalCents,subtotalCents:sum(l=>l.price.subtotal),costCents:sum(l=>l.costCents),...paid}});
-  for(const {lot,quantityMilli,costCents,price,promo} of items){
+  for(const {lot,quantityMilli,costCents,price} of items){
    const remaining=lot.quantityMilli-quantityMilli;
    await tx.lot.update({where:{tenantId_id:{tenantId,id:lot.id}},data:{quantityMilli:remaining,remainingCostCents:lot.remainingCostCents-costCents,status:remaining===0n?"EXHAUSTED":lot.status}});
-   await tx.saleLine.create({data:{tenantId,saleId:sale.id,lotId:lot.id,productId:lot.productId,productName:lot.product.name,quantityMilli,unitPriceCents:lot.product.salePriceCents,subtotalCents:price.subtotal,totalCents:price.total,costCents,discountBps:promo?.discountBps??0,promotionId:promo?.id??null}});
+   await tx.saleLine.create({data:{tenantId,saleId:sale.id,lotId:lot.id,productId:lot.productId,productName:lot.product.name,quantityMilli,unitPriceCents:lot.product.salePriceCents,subtotalCents:price.subtotal,totalCents:price.total,costCents,discountBps:price.discountBps,promotionId:price.promotionId,promotionLabel:price.promotionLabel}});
    await tx.stockMovement.create({data:{tenantId,lotId:lot.id,saleId:sale.id,actorId:s.actorUserId,kind:"SALE",deltaMilli:-quantityMilli,deltaCostCents:-costCents,reason:"Venta "+sale.id}});
   }
   return sale;
