@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Unit {
+  KG
+  UNIT
+}
+
+enum Sector {
+  BUTCHERY
+  DELI
+  PRODUCE
+  GROCERY
+  OTHER
+}
+
+enum LotStatus {
+  AVAILABLE
+  REVIEW
+  BLOCKED
+  EXHAUSTED
+}
+
+enum MovementKind {
+  RECEIPT
+  TRANSFORM_IN
+  TRANSFORM_OUT
+  SALE
+  RETURN
+  WASTE
+  GIFT
+  ADJUSTMENT
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  INVENTORY
+  CASHIER
+}
+
+model Tenant {
+  id        String @id @default(uuid())
+  name      String
+  slug      String @unique
+  createdAt DateTime @default(now())
+  branches  Branch[]
+  members   Membership[]
+  products  Product[]
+  suppliers Supplier[]
+}
+
+model User {
+  id           String @id @default(uuid())
+  email        String @unique
+  passwordHash String
+  active       Boolean @default(true)
+  memberships  Membership[]
+}
+
+model Membership {
+  tenantId String
+  userId   String
+  role     Role
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  user     User @relation(fields: [userId], references: [id])
+  @@id([tenantId, userId])
+}
+
+model Branch {
+  id       String @default(uuid())
+  tenantId String
+  name     String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  lots     Lot[]
+  batches  Transformation[]
+  @@id([tenantId, id])
+}
+
+model Product {
+  id            String @default(uuid())
+  tenantId      String
+  sku           String
+  name          String
+  barcode       String?
+  unit          Unit
+  sector        Sector
+  salePriceCents BigInt @default(0)
+  alertDays     Int @default(3)
+  freshnessDays Int?
+  openedLifeDays Int?
+  active        Boolean @default(true)
+  tenant        Tenant @relation(fields: [tenantId], references: [id])
+  lots          Lot[]
+  @@id([tenantId, id])
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
+}
+
+model Supplier {
+  id       String @default(uuid())
+  tenantId String
+  name     String
+  phone    String?
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  lots     Lot[]
+  @@id([tenantId, id])
+}
+
+model Lot {
+  id                 String @default(uuid())
+  tenantId           String
+  branchId           String
+  productId          String
+  supplierId         String?
+  code               String
+  receivedAt         DateTime @default(now())
+  expiresOn          DateTime? @db.Date
+  openedAt           DateTime?
+  reviewAt           DateTime?
+  quantityMilli      BigInt
+  remainingCostCents BigInt
+  status             LotStatus @default(AVAILABLE)
+  branch             Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  product            Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id])
+  movements          StockMovement[]
+  inputs             Transformation[] @relation("SourceLot")
+  producedById       String?
+  producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id])
+  @@id([tenantId, id])
+  @@unique([tenantId, branchId, productId, code])
+  @@index([tenantId, branchId, status, expiresOn])
+}
+
+model Transformation {
+  id              String @default(uuid())
+  tenantId        String
+  branchId        String
+  sourceLotId     String
+  actorId         String
+  requestKey      String
+  requestHash     String
+  inputMilli      BigInt
+  inputCostCents  BigInt
+  createdAt       DateTime @default(now())
+  branch          Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  sourceLot       Lot @relation("SourceLot", fields: [tenantId, sourceLotId], references: [tenantId, id])
+  outputs         Lot[] @relation("ProducedLots")
+  movements       StockMovement[]
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+}
+
+model StockMovement {
+  id               String @id @default(uuid())
+  tenantId         String
+  lotId            String
+  transformationId String?
+  actorId          String
+  kind             MovementKind
+  deltaMilli       BigInt
+  deltaCostCents   BigInt
+  reason           String
+  createdAt        DateTime @default(now())
+  lot              Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  transformation   Transformation? @relation(fields: [tenantId, transformationId], references: [tenantId, id])
+  @@index([tenantId, lotId, createdAt])
+}
