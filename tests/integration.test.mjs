@@ -8,6 +8,7 @@ import {openShift,recordSale,closeShift,recordCashMovement,cancelSale} from "../
 import {lotOperation} from "../src/server/lot-operations.mjs";
 import {recordFinance} from "../src/server/finance.mjs";
 import {localDay} from "../src/domain/parse.mjs";
+import {stockSnapshot,stockControl,setTarget} from "../src/server/stock-control.mjs";
 const key=()=>randomUUID();
 test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aislamiento",{skip:process.env.RUN_DB_TESTS!=="1"},async()=>{
  const db=new PrismaClient();
@@ -33,6 +34,50 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   await assert.rejects(receivePurchase(db,s,{...multi,requestKey:key(),invoiceRef:"Invalid",lines:[{...multi.lines[0],code:key()},{...multi.lines[1],productId:key()}]}));
   assert.equal(await db.lot.count({where:{tenantId}}),before);
   await assert.rejects(receivePurchase(db,s,{...multi,requestKey:key()}));
+  // Physical count and inter-branch transfer: preserve stock ledger and costs.
+  const countedLotId=purchase.receipts[0].lotId;
+  const readSnapshot=async id=>{
+   const l=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id}}});
+   const m=await db.stockMovement.findFirst({where:{tenantId,lotId:id},orderBy:[{createdAt:"desc"},{id:"desc"}]});
+   return {l,snapshot:stockSnapshot(l,m?.id)};
+  };
+  const initial=await readSnapshot(countedLotId);
+  const countInput={lotId:countedLotId,requestKey:key(),kind:"COUNT",quantity:"0.8",addedCost:"",snapshot:initial.snapshot,reason:"Faltante físico"};
+  await assert.rejects(stockControl(db,other,countInput));
+  const count=await stockControl(db,s,countInput);
+  assert.equal(count.costCents,200n);
+  assert.equal((await stockControl(db,s,countInput)).id,count.id);
+  await assert.rejects(stockControl(db,s,{...countInput,requestKey:key()}),/cambió/);
+  const current=await readSnapshot(countedLotId);
+  const dest=await db.branch.create({data:{tenantId,name:"Sucursal 2"}});
+  const move={lotId:countedLotId,requestKey:key(),kind:"TRANSFER",quantity:"0.3",destinationBranchId:dest.id,snapshot:current.snapshot,reason:"Remito interno"};
+  await assert.rejects(stockControl(db,s,{...move,destinationBranchId:other.branchId}));
+  await assert.rejects(stockControl(db,s,{...move,quantity:"0.9"}));
+  const transfer=await stockControl(db,s,move);
+  assert.equal((await stockControl(db,s,move)).id,transfer.id);
+  const child=await readSnapshot(transfer.destinationLotId),origin=await readSnapshot(countedLotId);
+  assert.equal(child.l.status,"REVIEW");
+  assert.equal(child.l.supplierId,origin.l.supplierId);
+  assert.equal(+child.l.expiresOn,+origin.l.expiresOn);
+  assert.equal(+child.l.receivedAt,+origin.l.receivedAt);
+  assert.equal(child.l.quantityMilli+origin.l.quantityMilli,800n);
+  assert.equal(child.l.remainingCostCents+origin.l.remainingCostCents,800n);
+  await assert.rejects(stockControl(db,s,{...countInput,lotId:child.l.id,requestKey:key(),quantity:"0.4",snapshot:child.snapshot}));
+  const gain=await stockControl(db,s,{...countInput,lotId:child.l.id,requestKey:key(),quantity:"0.4",addedCost:"1",snapshot:child.snapshot});
+  assert.equal(gain.costCents,100n);
+  const updatedChild=await readSnapshot(child.l.id);
+  assert.equal(updatedChild.l.quantityMilli,400n);
+  assert.equal(updatedChild.l.remainingCostCents,400n);
+  for(const id of [countedLotId,child.l.id]){
+   const {l}=await readSnapshot(id);
+   const ledger=await db.stockMovement.findMany({where:{tenantId,lotId:id}});
+   assert.equal(ledger.reduce((a,m)=>a+m.deltaMilli,0n),l.quantityMilli);
+   assert.equal(ledger.reduce((a,m)=>a+m.deltaCostCents,0n),l.remainingCostCents);
+  }
+  const target=await setTarget(db,s,{branchId:dest.id,productId:cut.id,minimum:"1",target:"2"});
+  assert.equal(target.targetMilli,2000n);
+  await assert.rejects(setTarget(db,s,{branchId:other.branchId,productId:cut.id,minimum:"1",target:"2"}));
+  await assert.rejects(setTarget(db,s,{branchId:dest.id,productId:cut.id,minimum:"2",target:"1"}));
   const receipt=await receiveLot(db,s,receive);
   assert.equal((await receiveLot(db,s,receive)).id,receipt.id);
   await assert.rejects(receiveLot(db,other,{...receive,requestKey:key(),branchId:other.branchId}));

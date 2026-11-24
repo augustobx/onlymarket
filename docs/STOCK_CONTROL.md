@@ -1,0 +1,7 @@
+# Conteos, traslados y reposición
+- El conteo es por lote (no un cierre global de inventario). Solo OWNER/MANAGER pueden confirmar diferencias; el sistema compara un snapshot del lote y el último movimiento. Si cambió, requiere repetir el conteo.
+- Los faltantes reducen costo y cantidad; se registran como WASTE (pérdida de inventario, no necesariamente deterioro) y aparecen junto con mermas en el informe financiero. Los sobrantes requieren costo documentado y se retienen para revisión; no son ventas ni ingresos financieros.
+- El traslado entre sucursales es interno y transaccional: disminuye el lote de origen y crea un lote derivado en revisión, con mismo proveedor, ingreso, vencimiento y datos de apertura. Conserva costo total; no crea compra ni venta. El responsable libera el lote cuando recibe e inspecciona físicamente el envío. No implementa remitos fiscales, recepción parcial ni etapas de tránsito.
+- El código derivado se vincula al lote origen en trazabilidad. Una promoción exclusiva del lote original no se copia; las promociones de producto siguen sus reglas.
+- Reposición: mínimo y objetivo por producto/sucursal. Cuenta únicamente inventario apto, incluyendo próximos a vencer todavía aptos; muestra separado el retenido. Sugiere cantidad hasta el objetivo si cae por debajo del mínimo. No crea pedidos ni genera notificaciones push.
+- Pruebas de integración verifican faltantes, sobrantes, costo y peso conservados, idempotencia, rechazo de snapshots desactualizados, aislamiento y límites de reposición.
