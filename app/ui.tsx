@@ -7,7 +7,7 @@ export const states:Record<string,string>={AVAILABLE:"Disponible",EXPIRING:"Pró
 export function fixed(n:bigint,scale:number){const sign=n<0n?"-":"";const a=(n<0n?-n:n).toString().padStart(scale+1,"0");return sign+a.slice(0,-scale)+","+a.slice(-scale);}
 export function money(n:bigint){return "$ "+fixed(n,2);}
 export function amount(n:bigint,unit:string){return unit==="UNIT"&&n%1000n===0n?(n/1000n).toString()+" u.":fixed(n,3)+(unit==="KG"?" kg":" u.");}
-export async function Shell({title,children}:{title:string;children:ReactNode}){
+export async function Shell({title,children}:{title:string;children?:ReactNode}){
  const s=await requireSession();
  return <div className="workspace"><aside><Link className="brand" href="/">Only<span>Market</span></Link><p className="tenant">{s.tenantName}</p><nav><Link href="/">Resumen</Link><Link href="/catalogo">Catálogo</Link><Link href="/proveedores">Proveedores</Link><Link href="/inventario">Inventario y lotes</Link><Link href="/transformaciones">Desposte y fraccionamiento</Link></nav><form action={logoutAction}><button className="secondary">Cerrar sesión</button></form><small>NanoLabs · v0.1 · Desarrollo</small></aside><main className="content"><header><h1>{title}</h1><small>{s.email} · {s.role}</small></header>{s.role==="CASHIER"?<p className="notice">El punto de venta aún no está habilitado.</p>:children}</main></div>;
 }

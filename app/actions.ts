@@ -78,8 +78,8 @@ export async function reviewAction(f:FormData){
    await authorize(tx,s);
    const lot=await tx.lot.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}},include:{product:true}});
    if(!lot||lot.quantityMilli<=0n)throw new Error("Lote sin stock");
+   if(lot.status==="BLOCKED"&&decision!=="BLOCKED")throw new Error("Un lote bloqueado no se puede rehabilitar en esta versión");
    if(decision==="AVAILABLE"){
-     if(lot.status==="BLOCKED")throw new Error("Un lote bloqueado no se puede rehabilitar en esta versión");
      if(lot.expiresOn&&lot.expiresOn.toISOString().slice(0,10)<=localDay())throw new Error("Lote vencido");
      if(lot.product.sector==="PRODUCE"&&!lot.expiresOn&&lot.product.freshnessDays==null)throw new Error("Configurar plazo de revisión antes de liberar");
    }
