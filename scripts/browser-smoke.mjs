@@ -154,6 +154,27 @@ try{
  await page.getByRole("button",{name:"Cerrar caja"}).click();
  await page.getByRole("heading",{name:"Abrir caja"}).waitFor();
  const closedShift=await db.cashShift.findFirstOrThrow({where:{tenantId:tenant.id,closedAt:{not:null}}});assert.equal(closedShift.expectedCents,450000n);
+ await page.getByLabel("Fondo inicial ($)").fill("0");
+ await page.getByRole("button",{name:"Abrir caja"}).click();
+ await page.getByRole("heading",{name:"Nueva venta"}).waitFor();
+ await page.goto(base+"/ventas/devolucion/"+offeredSale.id);
+ await page.getByRole("heading",{name:"Devoluciones",exact:true}).waitFor();
+ await page.getByLabel("Artículo a devolver").selectOption(offeredSale.lines[0].id);
+ await page.getByLabel("Cantidad a devolver").fill("1");
+ await page.getByLabel("Destino",{exact:true}).selectOption("REVIEW");
+ await page.getByLabel("Motivo",{exact:true}).fill("Devolución posterior al cierre");
+ await page.getByLabel("Confirmo que realicé el reintegro manual indicado y el destino físico de la mercadería.").check();
+ await page.getByRole("button",{name:"Registrar devolución",exact:true}).click();
+ await page.getByRole("status").waitFor();
+ const returned=await db.saleReturn.findFirstOrThrow({where:{tenantId:tenant.id,saleId:offeredSale.id},include:{returnedLot:true}});
+ assert.equal(returned.refundCents,166667n);assert.equal(returned.transferCents,166667n);assert.equal(returned.cashCents,0n);
+ assert.equal(returned.returnedLot.status,"REVIEW");assert.equal(returned.returnedLot.quantityMilli,1000n);
+ await page.goto(base+"/pos");
+ await page.getByLabel("Efectivo contado ($)").fill("0");
+ await page.getByRole("button",{name:"Cerrar caja"}).click();
+ await page.getByRole("heading",{name:"Abrir caja"}).waitFor();
+ assert.equal((await db.cashShift.findUniqueOrThrow({where:{tenantId_id:{tenantId:tenant.id,id:closedShift.id}}})).expectedCents,450000n);
+ 
  await page.getByRole("button",{name:"Cerrar sesión"}).click();
  await page.getByRole("heading",{name:"Ingresar al comercio"}).waitFor();
  await page.goto(base+"/superadmin/login");
