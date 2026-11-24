@@ -8,6 +8,7 @@ import {openShift,recordSale,closeShift,recordCashMovement,cancelSale} from "../
 import {lotOperation} from "../src/server/lot-operations.mjs";
 import {recordFinance} from "../src/server/finance.mjs";
 import {localDay} from "../src/domain/parse.mjs";
+import {recordReturn} from "../src/server/returns.mjs";
 import {stockSnapshot,stockControl,setTarget} from "../src/server/stock-control.mjs";
 const key=()=>randomUUID();
 test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aislamiento",{skip:process.env.RUN_DB_TESTS!=="1"},async()=>{
@@ -143,6 +144,27 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   const closed=await closeShift(db,s,{shiftId:shift.id,counted:"500"});
   assert.equal(closed.expectedCents,50000n);
   await assert.rejects(recordSale(db,s,{...saleInput,requestKey:key()}));
+  const nextShift=await openShift(db,s,{branchId:s.branchId,opening:"500"});
+  const refundInput={saleId:promoSale.id,saleLineId:promoLine.id,shiftId:nextShift.id,requestKey:key(),quantity:"1",quoted:"75",parts:{transferCents:"75"},reason:"Devuelto",disposition:"REVIEW",confirm:"yes"};
+  await assert.rejects(recordReturn(db,other,refundInput));
+  const refund=await recordReturn(db,s,refundInput);
+  assert.equal(refund.refundCents,7500n);assert.equal(refund.costCents,4000n);
+  assert.equal((await recordReturn(db,s,refundInput)).id,refund.id);
+  const quarantine=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:refund.returnedLotId}}});
+  assert.equal(quarantine.status,"REVIEW");assert.equal(quarantine.quantityMilli,1000n);
+  await assert.rejects(recordReturn(db,s,{...refundInput,requestKey:key(),quantity:"4"}));
+  const rest=await recordReturn(db,s,{...refundInput,requestKey:key(),quantity:"3",quoted:"225",parts:{transferCents:"225"},disposition:"WASTE"});
+  assert.equal(rest.refundCents+refund.refundCents,promoSale.totalCents);
+  assert.equal(rest.costCents+refund.costCents,promoSale.costCents);
+  await assert.rejects(recordReturn(db,s,{...refundInput,requestKey:key()}));
+  await assert.rejects(cancelSale(db,s,{saleId:promoSale.id,requestKey:key(),reason:"No duplicar",disposition:"WASTE",confirm:"yes"}));
+  const cashSale=await recordSale(db,s,{shiftId:nextShift.id,requestKey:key(),payment:"CASH",tendered:"100",quotedTotal:"90",lines:[{lotId:packagedReceipt.lotId,quantity:"1"}]});
+  const cashLine=await db.saleLine.findFirstOrThrow({where:{tenantId,saleId:cashSale.id}});
+  const closeSecond=await closeShift(db,s,{shiftId:nextShift.id,counted:"590"});assert.equal(closeSecond.expectedCents,59000n);
+  const thirdShift=await openShift(db,s,{branchId:s.branchId,opening:"100"});
+  await recordReturn(db,s,{...refundInput,saleId:cashSale.id,saleLineId:cashLine.id,shiftId:thirdShift.id,requestKey:key(),quoted:"90",parts:{cashCents:"90"},disposition:"WASTE"});
+  const closeThird=await closeShift(db,s,{shiftId:thirdShift.id,counted:"10"});assert.equal(closeThird.expectedCents,1000n);
+  assert.equal((await db.cashShift.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:nextShift.id}}})).expectedCents,59000n);
   const expense=await recordFinance(db,s,{requestKey:key(),date:localDay(),amount:"100",category:"Luz",description:"Test"},"EXPENSE");
   assert.equal(expense.amountCents,10000n);
   const payment=await recordFinance(db,s,{requestKey:key(),date:localDay(),amount:"5000",supplierId:supplier.id,payment:"TRANSFER"},"PAYMENT");

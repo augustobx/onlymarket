@@ -1,6 +1,6 @@
-export function summarizeFinance({sales,costOfSales,waste,gifts,expenses,purchases,payments}){
- for(const v of [sales,costOfSales,waste,gifts,expenses,purchases,payments])if(typeof v!=="bigint"||v<0n)throw new Error("Importe inválido");
- const gross=sales-costOfSales;
+export function summarizeFinance({sales,costOfSales,waste,gifts,expenses,purchases,payments,refunds=0n,returnedCost=0n}){
+ for(const v of [sales,costOfSales,waste,gifts,expenses,purchases,payments,refunds,returnedCost])if(typeof v!=="bigint"||v<0n)throw new Error("Importe inválido");
+ const gross=sales-refunds-costOfSales+returnedCost;
  return {gross,estimatedOperatingProfit:gross-waste-gifts-expenses,purchases,payments};
 }
 export function periodBounds(from,to){

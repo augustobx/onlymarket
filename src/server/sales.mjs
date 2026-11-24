@@ -87,12 +87,13 @@ export async function recordSale(prisma,s,input){
 
 export async function expectedCash(tx,shift){
  const where={tenantId:shift.tenantId,shiftId:shift.id};
- const [sales,moves]=await Promise.all([
+ const [sales,moves,returns]=await Promise.all([
   tx.sale.aggregate({where:{...where,cancellation:null},_sum:{cashCents:true}}),
-  tx.cashMovement.groupBy({by:["kind"],where,_sum:{amountCents:true}})
+  tx.cashMovement.groupBy({by:["kind"],where,_sum:{amountCents:true}}),
+  tx.saleReturn.aggregate({where,_sum:{cashCents:true}})
  ]);
  const sum=kind=>moves.find(m=>m.kind===kind)?._sum.amountCents??0n;
- return checked(shift.openingCents+(sales._sum.cashCents??0n)+sum("IN")-sum("OUT"));
+ return checked(shift.openingCents+(sales._sum.cashCents??0n)+sum("IN")-sum("OUT")-(returns._sum.cashCents??0n));
 }
 export async function recordCashMovement(prisma,s,input){
  const shiftId=textField(input.shiftId,"Caja"),requestKey=textField(input.requestKey,"Operación"),reason=textField(input.reason,"Motivo",300);
@@ -121,8 +122,9 @@ export async function cancelSale(prisma,s,input){
   const tenantId=s.tenantId;
   const old=await tx.saleCancellation.findUnique({where:{tenantId_requestKey:{tenantId,requestKey}}});
   if(old){if(old.requestHash!==requestHash)throw new Error("Operación duplicada con otros datos");return old;}
-  const sale=await tx.sale.findUnique({where:{tenantId_id:{tenantId,id:saleId}},include:{shift:true,lines:{include:{lot:true}},cancellation:true}});
+  const sale=await tx.sale.findUnique({where:{tenantId_id:{tenantId,id:saleId}},include:{shift:true,lines:{include:{lot:true}},cancellation:true,returns:{take:1}}});
   if(!sale||sale.cancellation)throw new Error("Venta inexistente o ya anulada");
+  if(sale.returns.length)throw new Error("La venta tiene devoluciones; devolvé los renglones restantes");
   if(sale.shift.closedAt||localDay(sale.createdAt)!==localDay())throw new Error("Solo ventas del día con caja abierta");
   if(sale.cashCents>0n&&await expectedCash(tx,sale.shift)<sale.cashCents)throw new Error("Efectivo insuficiente para reintegro");
   const cancellation=await tx.saleCancellation.create({data:{tenantId,saleId,actorId:s.actorUserId,requestKey,requestHash,reason,disposition}});

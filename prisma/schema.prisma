@@ -148,6 +148,7 @@ model Lot {
   movements          StockMovement[]
   receipt            Receipt?
   adjustments        LotOperation[]
+  returnedStock SaleReturn[]
   controls StockControl[] @relation("ControlSource")
   transfersIn StockControl[] @relation("ControlDestination")
   saleLines          SaleLine[]
@@ -259,6 +260,7 @@ model CashShift {
   branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   sales Sale[]
   cashMovements CashMovement[]
+  returns SaleReturn[]
   @@id([tenantId, id])
   @@unique([tenantId, activeKey])
   @@index([tenantId, branchId, openedAt])
@@ -293,6 +295,7 @@ model Sale {
   shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lines SaleLine[]
   cancellation SaleCancellation?
+  returns SaleReturn[]
   movements StockMovement[]
   @@id([tenantId, id])
   @@unique([tenantId, requestKey])
@@ -317,6 +320,8 @@ model SaleLine {
   sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  returns SaleReturn[]
+  @@unique([tenantId, id])
   @@index([tenantId, saleId])
 }
 
@@ -532,4 +537,36 @@ model StockTarget {
  branch Branch @relation(fields:[tenantId,branchId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
  product Product @relation(fields:[tenantId,productId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
  @@id([tenantId,branchId,productId])
+}
+
+model SaleReturn {
+ id String @default(uuid())
+ tenantId String
+ saleId String
+ saleLineId String
+ shiftId String
+ returnedLotId String?
+ actorId String
+ requestKey String
+ requestHash String
+ quantityMilli BigInt
+ refundCents BigInt
+ costCents BigInt
+ cashCents BigInt
+ debitCents BigInt
+ creditCents BigInt
+ transferCents BigInt
+ disposition String
+ reason String
+ createdAt DateTime @default(now())
+ sale Sale @relation(fields:[tenantId,saleId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ line SaleLine @relation(fields:[tenantId,saleLineId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ shift CashShift @relation(fields:[tenantId,shiftId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ returnedLot Lot? @relation(fields:[tenantId,returnedLotId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,saleId])
+ @@index([tenantId,saleLineId])
+ @@index([tenantId,shiftId])
+ @@index([tenantId,createdAt])
 }
