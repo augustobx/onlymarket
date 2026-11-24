@@ -138,7 +138,7 @@ try{
  await page.getByRole("button",{name:"Restar una unidad de Yerba smoke"}).click();
  assert.match(await page.locator(".total").innerText(),/5000,00/);
  await page.getByRole("button",{name:"Sumar una unidad de Yerba smoke"}).click();
- await page.getByLabel("Medio de pago",{exact:true}).selectOption("MIXED");
+ await page.locator('select[name="payment"]').selectOption("MIXED");
  await page.getByLabel("Efectivo asignado").fill("1000");
  await page.getByLabel("Transferencia asignada").fill("4000");
  await page.getByLabel("Efectivo recibido").fill("1200");
@@ -154,6 +154,7 @@ try{
  await page.getByRole("button",{name:"Cerrar caja"}).click();
  await page.getByRole("heading",{name:"Abrir caja"}).waitFor();
  const closedShift=await db.cashShift.findFirstOrThrow({where:{tenantId:tenant.id,closedAt:{not:null}}});assert.equal(closedShift.expectedCents,450000n);
+ await page.locator('select[name="branchId"]').selectOption(lot.branchId);
  await page.getByLabel("Fondo inicial ($)").fill("0");
  await page.getByRole("button",{name:"Abrir caja"}).click();
  await page.getByRole("heading",{name:"Nueva venta"}).waitFor();
@@ -161,7 +162,7 @@ try{
  await page.getByRole("heading",{name:"Devoluciones",exact:true}).waitFor();
  await page.getByLabel("Artículo a devolver").selectOption(offeredSale.lines[0].id);
  await page.getByLabel("Cantidad a devolver").fill("1");
- await page.getByLabel("Destino",{exact:true}).selectOption("REVIEW");
+ await page.locator('select[name="disposition"]').selectOption("REVIEW");
  await page.getByLabel("Motivo",{exact:true}).fill("Devolución posterior al cierre");
  await page.getByLabel("Confirmo que realicé el reintegro manual indicado y el destino físico de la mercadería.").check();
  await page.getByRole("button",{name:"Registrar devolución",exact:true}).click();
@@ -220,7 +221,7 @@ try{
  await page.getByRole("button",{name:"Agregar",exact:true}).click();
  await page.getByLabel("Cliente (opcional)").selectOption(member.id);
  assert.match(await page.locator(".total").innerText(),/3925,00/);
- await page.getByLabel("Medio de pago",{exact:true}).selectOption("TRANSFER");
+ await page.locator('select[name="payment"]').selectOption("TRANSFER");
  await page.getByRole("button",{name:"Confirmar venta"}).click();
  await page.getByRole("status").waitFor();
  const memberSale=await db.sale.findFirstOrThrow({where:{tenantId:tenant.id,customerId:member.id},include:{lines:true}});
