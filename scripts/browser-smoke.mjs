@@ -45,7 +45,7 @@ try{
  await page.getByRole("button",{name:"Agregar",exact:true}).click();
  await page.getByLabel("Efectivo recibido").fill("3000");
  await page.getByRole("button",{name:"Confirmar venta"}).click();
- await page.getByRole("status").waitFor();
+ await page.getByRole("link",{name:"Ver / imprimir"}).first().waitFor();
  const tenant=await db.tenant.findUniqueOrThrow({where:{slug:process.env.BOOTSTRAP_SLUG}});
  const sale=await db.sale.findFirstOrThrow({where:{tenantId:tenant.id}});
  assert.equal(sale.totalCents,250000n);assert.equal(sale.costCents,150000n);assert.equal(sale.changeCents,50000n);
