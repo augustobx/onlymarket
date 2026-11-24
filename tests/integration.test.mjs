@@ -114,6 +114,16 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   const opened=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:lot.id}}});
   assert.ok(opened.openedAt);
   assert.ok(opened.expiresOn<=new Date(expiresOn+"T00:00:00Z"));
+  const packaged=await db.product.create({data:{tenantId,sku:key(),name:"Pack",unit:"UNIT",sector:"GROCERY",salePriceCents:10000n}});
+  const packagedReceipt=await receiveLot(db,s,{...receive,productId:packaged.id,code:key(),requestKey:key(),invoiceRef:"Pack",quantity:"8",cost:"320",expiresOn});
+  const bundle=await db.promotion.create({data:{tenantId,productId:packaged.id,name:"3x2",discountBps:0,buyUnits:3,payUnits:2,startsOn:new Date(localDay()+"T00:00:00Z"),endsOn:new Date(expiresOn+"T00:00:00Z")}});
+  await db.promotion.create({data:{tenantId,productId:packaged.id,name:"10%",discountBps:1000,startsOn:new Date(localDay()+"T00:00:00Z"),endsOn:new Date(expiresOn+"T00:00:00Z")}});
+  const promoSale=await recordSale(db,s,{shiftId:shift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"300",lines:[{lotId:packagedReceipt.lotId,quantity:"4"}]});
+  assert.equal(promoSale.totalCents,30000n);assert.equal(promoSale.costCents,16000n);
+  const promoLine=await db.saleLine.findFirstOrThrow({where:{tenantId,saleId:promoSale.id}});
+  assert.equal(promoLine.promotionId,bundle.id);assert.equal(promoLine.promotionLabel,"3x2");assert.equal(promoLine.subtotalCents,40000n);
+  const packageLot=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:packagedReceipt.lotId}}});
+  assert.equal(packageLot.quantityMilli,4000n);
   const cashInput={shiftId:shift.id,requestKey:key(),kind:"IN",amount:"500",reason:"Aporte"};
   const income=await recordCashMovement(db,s,cashInput);
   assert.equal((await recordCashMovement(db,s,cashInput)).id,income.id);

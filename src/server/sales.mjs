@@ -52,15 +52,18 @@ export async function recordSale(prisma,s,input){
   const shift=await tx.cashShift.findUnique({where:{tenantId_id:{tenantId,id:shiftId}}});
   if(!shift||shift.actorId!==s.actorUserId||shift.closedAt||!shift.activeKey)throw new Error("Caja no disponible");
   const today=localDay(), items=[];
+  const saleLots=await tx.lot.findMany({where:{tenantId,branchId:shift.branchId,id:{in:lines.map(([id])=>id)}},include:{product:true}});
+  const byId=new Map(saleLots.map(l=>[l.id,l]));
+  const promos=await tx.promotion.findMany({where:{tenantId,productId:{in:[...new Set(saleLots.map(l=>l.productId))]},active:true}});
+  const promoDates=promos.map(p=>({...p,startsOn:dayOnly(p.startsOn),endsOn:dayOnly(p.endsOn)}));
   for(const [id,quantityMilli] of lines){
-   const lot=await tx.lot.findUnique({where:{tenantId_id:{tenantId,id}},include:{product:true}});
+   const lot=byId.get(id);
    if(!lot||lot.branchId!==shift.branchId||!lot.product.active)throw new Error("Lote inválido para esta caja");
    if(lot.product.unit==="UNIT"&&quantityMilli%1000n)throw new Error("Se requieren unidades enteras");
    const info={...lot,expiresOn:dayOnly(lot.expiresOn),reviewOn:lot.reviewAt?localDay(lot.reviewAt):null,alertDays:lot.product.alertDays};
    if(!["AVAILABLE","EXPIRING"].includes(classifyLot({...info,today})))throw new Error("Lote no apto para venta");
    const costCents=consumeCost(lot.quantityMilli,lot.remainingCostCents,quantityMilli);
-   const promos=await tx.promotion.findMany({where:{tenantId,productId:lot.productId,active:true}});
-   const eligible=eligiblePromotions(promos.map(p=>({...p,startsOn:dayOnly(p.startsOn),endsOn:dayOnly(p.endsOn)})),info,today);
+   const eligible=eligiblePromotions(promoDates,info,today);
    const price=quotePromotion(lot.product.salePriceCents,quantityMilli,lot.product.unit,eligible);
    items.push({lot,quantityMilli,costCents,price});
   }
