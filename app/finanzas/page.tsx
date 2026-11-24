@@ -14,7 +14,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
  const where={tenantId:s.tenantId},time={gte:range.start,lt:range.end},dates={gte:range.fromDate,lte:range.toDate};
  const [sales,losses,expenses,purchases,payments,suppliers,allPurchases,allPayments,recentExpenses,recentPayments]=await db.$transaction(async tx=>{
  return Promise.all([
- tx.sale.aggregate({where:{...where,createdAt:time},_sum:{totalCents:true,costCents:true}}),
+ tx.sale.aggregate({where:{...where,createdAt:time,cancellation:null},_sum:{totalCents:true,costCents:true}}),
  tx.stockMovement.groupBy({by:["kind"],orderBy:{kind:"asc"},where:{...where,createdAt:time,kind:{in:["WASTE","GIFT"]}},_sum:{deltaCostCents:true}}),
  tx.expense.aggregate({where:{...where,occurredOn:dates},_sum:{amountCents:true}}),
  tx.receipt.aggregate({where:{...where,createdAt:time},_sum:{totalCostCents:true}}),

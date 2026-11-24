@@ -249,6 +249,7 @@ model CashShift {
   expectedCents BigInt?
   branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   sales Sale[]
+  cashMovements CashMovement[]
   @@id([tenantId, id])
   @@unique([tenantId, activeKey])
   @@index([tenantId, branchId, openedAt])
@@ -270,6 +271,7 @@ model Sale {
   createdAt DateTime @default(now())
   shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lines SaleLine[]
+  cancellation SaleCancellation?
   movements StockMovement[]
   @@id([tenantId, id])
   @@unique([tenantId, requestKey])
@@ -375,4 +377,42 @@ model CatalogChange {
  next String
  createdAt DateTime @default(now())
  @@index([tenantId,productId,createdAt])
+}
+
+enum CashMovementKind {
+  IN
+  OUT
+}
+
+model CashMovement {
+  id String @default(uuid())
+  tenantId String
+  shiftId String
+  actorId String
+  requestKey String
+  requestHash String
+  kind CashMovementKind
+  amountCents BigInt
+  reason String
+  createdAt DateTime @default(now())
+  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId,id])
+  @@unique([tenantId,requestKey])
+  @@index([tenantId,shiftId,createdAt])
+}
+
+model SaleCancellation {
+  id String @default(uuid())
+  tenantId String
+  saleId String
+  actorId String
+  requestKey String
+  requestHash String
+  reason String
+  disposition String
+  createdAt DateTime @default(now())
+  sale Sale @relation(fields: [tenantId,saleId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId,id])
+  @@unique([tenantId,saleId])
+  @@unique([tenantId,requestKey])
 }

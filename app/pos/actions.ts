@@ -3,7 +3,7 @@ import {redirect} from "next/navigation";
 import {revalidatePath} from "next/cache";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
-import {openShift,closeShift,recordSale} from "../../src/server/sales.mjs";
+import {openShift,closeShift,recordSale,recordCashMovement} from "../../src/server/sales.mjs";
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
 async function operation(fn:()=>Promise<unknown>){
  let error="";
@@ -20,3 +20,5 @@ export async function saleAction(f:FormData){
   await recordSale(db,s,{shiftId:str(f,"shiftId"),requestKey:str(f,"requestKey"),payment:str(f,"payment"),quotedTotal:str(f,"quotedTotal"),tendered:str(f,"tendered"),lines});
  });
 }
+
+export async function cashMovementAction(f:FormData){const s=await requireSession();await operation(()=>recordCashMovement(db,s,Object.fromEntries(["shiftId","requestKey","kind","amount","reason"].map(k=>[k,str(f,k)]))));}

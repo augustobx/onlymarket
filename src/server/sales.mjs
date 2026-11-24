@@ -31,8 +31,7 @@ export async function closeShift(prisma,s,input){
   const shift=await tx.cashShift.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}}});
   if(!shift||shift.actorId!==s.actorUserId)throw new Error("Caja inválida");
   if(shift.closedAt){if(shift.countedCents===countedCents)return shift;throw new Error("Caja cerrada");}
-  const cash=await tx.sale.aggregate({where:{tenantId:s.tenantId,shiftId:id,payment:"CASH"},_sum:{totalCents:true}});
-  const expectedCents=checked(shift.openingCents+(cash._sum.totalCents??0n));
+  const expectedCents=await expectedCash(tx,shift);
   return tx.cashShift.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{activeKey:null,closedAt:new Date(),expectedCents,countedCents}});
  });
 }
@@ -77,5 +76,60 @@ export async function recordSale(prisma,s,input){
    await tx.stockMovement.create({data:{tenantId,lotId:lot.id,saleId:sale.id,actorId:s.actorUserId,kind:"SALE",deltaMilli:-quantityMilli,deltaCostCents:-costCents,reason:"Venta "+sale.id}});
   }
   return sale;
+ });
+}
+
+export async function expectedCash(tx,shift){
+ const where={tenantId:shift.tenantId,shiftId:shift.id};
+ const [sales,moves]=await Promise.all([
+  tx.sale.aggregate({where:{...where,payment:"CASH",cancellation:null},_sum:{totalCents:true}}),
+  tx.cashMovement.groupBy({by:["kind"],where,_sum:{amountCents:true}})
+ ]);
+ const sum=kind=>moves.find(m=>m.kind===kind)?._sum.amountCents??0n;
+ return checked(shift.openingCents+(sales._sum.totalCents??0n)+sum("IN")-sum("OUT"));
+}
+export async function recordCashMovement(prisma,s,input){
+ const shiftId=textField(input.shiftId,"Caja"),requestKey=textField(input.requestKey,"Operación"),reason=textField(input.reason,"Motivo",300);
+ const kind=input.kind,amountCents=decimal(input.amount,2,"Importe");
+ if(!["IN","OUT"].includes(kind))throw new Error("Tipo de movimiento inválido");
+ const requestHash=createHash("sha256").update(JSON.stringify([s.actorUserId,shiftId,kind,amountCents.toString(),reason])).digest("hex");
+ return serial(prisma,async tx=>{
+  await authorizeSale(tx,s);
+  const tenantId=s.tenantId;
+  const old=await tx.cashMovement.findUnique({where:{tenantId_requestKey:{tenantId,requestKey}}});
+  if(old){if(old.requestHash!==requestHash)throw new Error("Operación duplicada con otros datos");return old;}
+  const shift=await tx.cashShift.findUnique({where:{tenantId_id:{tenantId,id:shiftId}}});
+  if(!shift||shift.actorId!==s.actorUserId||shift.closedAt)throw new Error("Caja no disponible");
+  const available=await expectedCash(tx,shift);
+  if(kind==="OUT"&&available<amountCents)throw new Error("Efectivo insuficiente en caja");
+  if(kind==="IN")checked(available+amountCents);
+  return tx.cashMovement.create({data:{tenantId,shiftId,actorId:s.actorUserId,requestKey,requestHash,kind,amountCents,reason}});
+ });
+}
+export async function cancelSale(prisma,s,input){
+ const saleId=textField(input.saleId,"Venta"),requestKey=textField(input.requestKey,"Operación"),reason=textField(input.reason,"Motivo",300),disposition=input.disposition;
+ if(!["REVIEW","WASTE"].includes(disposition)||input.confirm!=="yes")throw new Error("Confirmá el reintegro y destino de la mercadería");
+ const requestHash=createHash("sha256").update(JSON.stringify([s.actorUserId,saleId,reason,disposition])).digest("hex");
+ return serial(prisma,async tx=>{
+  await authorizeSale(tx,s,["OWNER","MANAGER"]);
+  const tenantId=s.tenantId;
+  const old=await tx.saleCancellation.findUnique({where:{tenantId_requestKey:{tenantId,requestKey}}});
+  if(old){if(old.requestHash!==requestHash)throw new Error("Operación duplicada con otros datos");return old;}
+  const sale=await tx.sale.findUnique({where:{tenantId_id:{tenantId,id:saleId}},include:{shift:true,lines:{include:{lot:true}},cancellation:true}});
+  if(!sale||sale.cancellation)throw new Error("Venta inexistente o ya anulada");
+  if(sale.shift.closedAt||localDay(sale.createdAt)!==localDay())throw new Error("Solo ventas del día con caja abierta");
+  if(sale.payment==="CASH"&&await expectedCash(tx,sale.shift)<sale.totalCents)throw new Error("Efectivo insuficiente para reintegro");
+  const cancellation=await tx.saleCancellation.create({data:{tenantId,saleId,actorId:s.actorUserId,requestKey,requestHash,reason,disposition}});
+  for(const line of sale.lines){
+   const lot=await tx.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:line.lotId}}});
+   const base={tenantId,lotId:lot.id,saleId,actorId:s.actorUserId,reason:"Anulación "+cancellation.id+": "+reason};
+   await tx.stockMovement.create({data:{...base,kind:"RETURN",deltaMilli:line.quantityMilli,deltaCostCents:line.costCents}});
+   if(disposition==="WASTE"){
+    await tx.stockMovement.create({data:{...base,kind:"WASTE",deltaMilli:-line.quantityMilli,deltaCostCents:-line.costCents}});
+   }else{
+    await tx.lot.update({where:{tenantId_id:{tenantId,id:lot.id}},data:{quantityMilli:checked(lot.quantityMilli+line.quantityMilli),remainingCostCents:checked(lot.remainingCostCents+line.costCents),status:lot.status==="BLOCKED"?"BLOCKED":"REVIEW"}});
+   }
+  }
+  return cancellation;
  });
 }
