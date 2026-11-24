@@ -57,6 +57,14 @@ model Tenant {
   suppliers Supplier[]
   expenses Expense[]
   templates TransformTemplate[]
+  profile String @default("SUPERMARKET")
+  plan String @default("PILOT")
+  licenseUntil DateTime? @db.Date
+  suspended Boolean @default(false)
+  weightPrefix String?
+  pointsEveryCents BigInt @default(100000)
+  customers Customer[]
+  combos Combo[]
 }
 
 model User {
@@ -103,6 +111,7 @@ model Product {
   alertDays     Int @default(3)
   freshnessDays Int?
   openedLifeDays Int?
+  weightCode String?
   active        Boolean @default(true)
   tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots          Lot[]
@@ -112,6 +121,7 @@ model Product {
   @@id([tenantId, id])
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
+  @@unique([tenantId, weightCode])
 }
 
 model Supplier {
@@ -294,6 +304,8 @@ model Sale {
   createdAt DateTime @default(now())
   shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lines SaleLine[]
+  customerId String?
+  customer Customer? @relation(fields:[tenantId,customerId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
   cancellation SaleCancellation?
   returns SaleReturn[]
   movements StockMovement[]
@@ -569,4 +581,30 @@ model SaleReturn {
  @@index([tenantId,saleLineId])
  @@index([tenantId,shiftId])
  @@index([tenantId,createdAt])
+}
+
+model Customer {
+ id String @default(uuid())
+ tenantId String
+ code String
+ name String
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+ sales Sale[]
+ @@id([tenantId,id])
+ @@unique([tenantId,code])
+}
+model Combo {
+ id String @default(uuid())
+ tenantId String
+ name String
+ items Json
+ priceCents BigInt
+ startsOn DateTime @db.Date
+ endsOn DateTime @db.Date
+ active Boolean @default(true)
+ tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@index([tenantId,active])
 }

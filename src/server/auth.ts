@@ -1,5 +1,7 @@
 import {cookies} from "next/headers";
 import {redirect} from "next/navigation";
+import {licenseActive} from "../domain/settings.mjs";
+import {localDay} from "../domain/parse.mjs";
 import {db} from "./db";
 import {newToken,tokenHash,verifyPassword} from "./password.mjs";
 const COOKIE="onlymarket_session";
@@ -8,10 +10,10 @@ export async function currentSession(){
   const token=(await cookies()).get(COOKIE)?.value;
   if(!token||!/^[a-f0-9]{64}$/.test(token))return null;
   const session=await db.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true,tenant:true}});
-  if(!session||session.expiresAt<=new Date()||!session.user.active)return null;
+  if(!session||session.expiresAt<=new Date()||!session.user.active||!licenseActive(session.tenant,localDay()))return null;
   const member=await db.membership.findUnique({where:{tenantId_userId:{tenantId:session.tenantId,userId:session.userId}}});
   if(!member)return null;
-  return {tenantId:session.tenantId,actorUserId:session.userId,role:member.role,tenantName:session.tenant.name,email:session.user.email};
+  return {tenantId:session.tenantId,actorUserId:session.userId,role:member.role,tenantName:session.tenant.name,email:session.user.email,profile:session.tenant.profile,plan:session.tenant.plan};
 }
 export async function requireSession(){const s=await currentSession();if(!s)redirect("/login");return s;}
 async function allowAttempt(email:string,slug:string){
@@ -33,7 +35,7 @@ export async function login(email:string,password:string,slug:string){
   const valid=await verifyPassword(password,user?.passwordHash??DUMMY);
   if(!valid||!user?.active)return false;
   const tenant=await db.tenant.findUnique({where:{slug}});
-  if(!tenant||!await db.membership.findUnique({where:{tenantId_userId:{tenantId:tenant.id,userId:user.id}}}))return false;
+  if(!tenant||!licenseActive(tenant,localDay())||!await db.membership.findUnique({where:{tenantId_userId:{tenantId:tenant.id,userId:user.id}}}))return false;
   const token=newToken(), jar=await cookies(), old=jar.get(COOKIE)?.value;
   const expiresAt=new Date(Date.now()+12*3600000);
   await db.$transaction(async tx=>{

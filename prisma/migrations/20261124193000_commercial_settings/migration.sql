@@ -1,0 +1,13 @@
+ALTER TABLE "Tenant" ADD COLUMN "profile" TEXT NOT NULL DEFAULT 'SUPERMARKET', ADD COLUMN "plan" TEXT NOT NULL DEFAULT 'PILOT', ADD COLUMN "licenseUntil" DATE, ADD COLUMN "suspended" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN "weightPrefix" TEXT, ADD COLUMN "pointsEveryCents" BIGINT NOT NULL DEFAULT 100000;
+ALTER TABLE "Tenant" ADD CONSTRAINT "tenant_settings_valid" CHECK ("profile" IN ('KIOSK','MARKET','SUPERMARKET','BUTCHERY','DELI','PRODUCE') AND "plan" IN ('PILOT','BASIC','PRO','ENTERPRISE') AND ("weightPrefix" IS NULL OR "weightPrefix" ~ '^2[0-9]$') AND "pointsEveryCents">0);
+ALTER TABLE "Product" ADD COLUMN "weightCode" TEXT;
+CREATE UNIQUE INDEX "Product_tenantId_weightCode_key" ON "Product"("tenantId","weightCode");
+ALTER TABLE "Product" ADD CONSTRAINT "product_weight_code_valid" CHECK ("weightCode" IS NULL OR ("weightCode" ~ '^[0-9]{5}$' AND unit='KG'));
+CREATE TABLE "Customer" ("id" TEXT NOT NULL,"tenantId" TEXT NOT NULL,"code" TEXT NOT NULL,"name" TEXT NOT NULL,"active" BOOLEAN NOT NULL DEFAULT true,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "Customer_pkey" PRIMARY KEY ("tenantId","id"));
+CREATE UNIQUE INDEX "Customer_tenantId_code_key" ON "Customer"("tenantId","code");
+ALTER TABLE "Customer" ADD CONSTRAINT "Customer_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Sale" ADD COLUMN "customerId" TEXT;
+ALTER TABLE "Sale" ADD CONSTRAINT "Sale_tenantId_customerId_fkey" FOREIGN KEY ("tenantId","customerId") REFERENCES "Customer"("tenantId","id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE TABLE "Combo" ("id" TEXT NOT NULL,"tenantId" TEXT NOT NULL,"name" TEXT NOT NULL,"items" JSONB NOT NULL,"priceCents" BIGINT NOT NULL,"startsOn" DATE NOT NULL,"endsOn" DATE NOT NULL,"active" BOOLEAN NOT NULL DEFAULT true,CONSTRAINT "Combo_pkey" PRIMARY KEY ("tenantId","id"),CONSTRAINT "combo_valid" CHECK ("priceCents">=0 AND "startsOn"<="endsOn"));
+CREATE INDEX "Combo_tenantId_active_idx" ON "Combo"("tenantId","active");
+ALTER TABLE "Combo" ADD CONSTRAINT "Combo_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
