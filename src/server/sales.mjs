@@ -1,7 +1,7 @@
 import {createHash} from "node:crypto";
 import {decimal,textField,localDay} from "../domain/parse.mjs";
 import {consumeCost,classifyLot} from "../domain/inventory.mjs";
-import {eligiblePromotions,quotePromotion,paymentAmounts,checked} from "../domain/sales.mjs";
+import {eligiblePromotions,quotePromotion,paymentBreakdown,checked} from "../domain/sales.mjs";
 const dayOnly=d=>d?.toISOString().slice(0,10)??null;
 const roles=["OWNER","MANAGER","CASHIER"];
 export async function authorizeSale(tx,s,allowed=roles){
@@ -41,9 +41,13 @@ export async function recordSale(prisma,s,input){
  const quantities=new Map();
  for(const l of input.lines){const id=textField(l.lotId,"Lote"),q=decimal(l.quantity,3,"Cantidad");quantities.set(id,checked((quantities.get(id)??0n)+q));}
  const lines=[...quantities].sort(([a],[b])=>a.localeCompare(b));
- const tendered=payment==="CASH"?decimal(input.tendered,2,"Efectivo recibido",{allowZero:true}):null;
  const quoted=decimal(input.quotedTotal,2,"Total confirmado",{allowZero:true});
- const requestHash=createHash("sha256").update(JSON.stringify([s.actorUserId,shiftId,payment,tendered,quoted,lines],(_,v)=>typeof v==="bigint"?v.toString():v)).digest("hex");
+ const parts=payment==="MIXED"?Object.fromEntries(["cashCents","debitCents","creditCents","transferCents"].map(k=>[k,decimal(input.parts?.[k]||"0",2,"Importe del medio",{allowZero:true})])):{};
+ const tendered=payment==="CASH"||(parts.cashCents??0n)>0n?decimal(input.tendered,2,"Efectivo recibido",{allowZero:true}):null;
+ const paid=paymentBreakdown(quoted,payment,tendered,parts);
+ const payload=[s.actorUserId,shiftId,payment,tendered,quoted,lines];
+ if(payment==="MIXED")payload.push(parts);
+ const requestHash=createHash("sha256").update(JSON.stringify(payload,(_,v)=>typeof v==="bigint"?v.toString():v)).digest("hex");
  return serial(prisma,async tx=>{
   await authorizeSale(tx,s);
   const tenantId=s.tenantId;
@@ -70,7 +74,6 @@ export async function recordSale(prisma,s,input){
   const sum=fn=>checked(items.reduce((a,l)=>a+fn(l),0n));
   const totalCents=sum(l=>l.price.total);
   if(totalCents!==quoted)throw new Error("El precio cambió. Revisá y confirmá nuevamente.");
-  const paid=paymentAmounts(totalCents,payment,tendered);
   const sale=await tx.sale.create({data:{tenantId,shiftId,actorId:s.actorUserId,requestKey,requestHash,payment,totalCents,subtotalCents:sum(l=>l.price.subtotal),costCents:sum(l=>l.costCents),...paid}});
   for(const {lot,quantityMilli,costCents,price} of items){
    const remaining=lot.quantityMilli-quantityMilli;
@@ -85,11 +88,11 @@ export async function recordSale(prisma,s,input){
 export async function expectedCash(tx,shift){
  const where={tenantId:shift.tenantId,shiftId:shift.id};
  const [sales,moves]=await Promise.all([
-  tx.sale.aggregate({where:{...where,payment:"CASH",cancellation:null},_sum:{totalCents:true}}),
+  tx.sale.aggregate({where:{...where,cancellation:null},_sum:{cashCents:true}}),
   tx.cashMovement.groupBy({by:["kind"],where,_sum:{amountCents:true}})
  ]);
  const sum=kind=>moves.find(m=>m.kind===kind)?._sum.amountCents??0n;
- return checked(shift.openingCents+(sales._sum.totalCents??0n)+sum("IN")-sum("OUT"));
+ return checked(shift.openingCents+(sales._sum.cashCents??0n)+sum("IN")-sum("OUT"));
 }
 export async function recordCashMovement(prisma,s,input){
  const shiftId=textField(input.shiftId,"Caja"),requestKey=textField(input.requestKey,"Operación"),reason=textField(input.reason,"Motivo",300);
@@ -121,7 +124,7 @@ export async function cancelSale(prisma,s,input){
   const sale=await tx.sale.findUnique({where:{tenantId_id:{tenantId,id:saleId}},include:{shift:true,lines:{include:{lot:true}},cancellation:true}});
   if(!sale||sale.cancellation)throw new Error("Venta inexistente o ya anulada");
   if(sale.shift.closedAt||localDay(sale.createdAt)!==localDay())throw new Error("Solo ventas del día con caja abierta");
-  if(sale.payment==="CASH"&&await expectedCash(tx,sale.shift)<sale.totalCents)throw new Error("Efectivo insuficiente para reintegro");
+  if(sale.cashCents>0n&&await expectedCash(tx,sale.shift)<sale.cashCents)throw new Error("Efectivo insuficiente para reintegro");
   const cancellation=await tx.saleCancellation.create({data:{tenantId,saleId,actorId:s.actorUserId,requestKey,requestHash,reason,disposition}});
   for(const line of sale.lines){
    const lot=await tx.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:line.lotId}}});

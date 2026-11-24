@@ -124,6 +124,12 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   assert.equal(promoLine.promotionId,bundle.id);assert.equal(promoLine.promotionLabel,"3x2");assert.equal(promoLine.subtotalCents,40000n);
   const packageLot=await db.lot.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:packagedReceipt.lotId}}});
   assert.equal(packageLot.quantityMilli,4000n);
+  const mixedInput={shiftId:shift.id,requestKey:key(),payment:"MIXED",quotedTotal:"180",tendered:"100",parts:{cashCents:"80",debitCents:"100"},lines:[{lotId:packagedReceipt.lotId,quantity:"2"}]};
+  const mixed=await recordSale(db,s,mixedInput);
+  assert.equal(mixed.cashCents,8000n);assert.equal(mixed.debitCents,10000n);assert.equal(mixed.changeCents,2000n);
+  assert.equal((await recordSale(db,s,mixedInput)).id,mixed.id);
+  await assert.rejects(recordSale(db,s,{...mixedInput,parts:{cashCents:"70",debitCents:"110"}}));
+  await cancelSale(db,s,{saleId:mixed.id,requestKey:key(),reason:"Reintegro mixto",disposition:"WASTE",confirm:"yes"});
   const cashInput={shiftId:shift.id,requestKey:key(),kind:"IN",amount:"500",reason:"Aporte"};
   const income=await recordCashMovement(db,s,cashInput);
   assert.equal((await recordCashMovement(db,s,cashInput)).id,income.id);

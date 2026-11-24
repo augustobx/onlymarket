@@ -17,7 +17,7 @@ export async function saleAction(f:FormData){
  const s=await requireSession();await operation(async()=>{
   const raw=str(f,"lines");if(raw.length>25000)throw new Error("Venta demasiado extensa");
   let lines;try{lines=JSON.parse(raw);}catch{throw new Error("Artículos inválidos");}
-  await recordSale(db,s,{shiftId:str(f,"shiftId"),requestKey:str(f,"requestKey"),payment:str(f,"payment"),quotedTotal:str(f,"quotedTotal"),tendered:str(f,"tendered"),lines});
+  await recordSale(db,s,{shiftId:str(f,"shiftId"),requestKey:str(f,"requestKey"),payment:str(f,"payment"),quotedTotal:str(f,"quotedTotal"),tendered:str(f,"tendered"),parts:Object.fromEntries(["cashCents","debitCents","creditCents","transferCents"].map(k=>[k,str(f,k)])),lines});
  });
 }
 

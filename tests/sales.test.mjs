@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {priceLine,bestPromotion,paymentAmounts,quotePromotion,eligiblePromotions} from "../src/domain/sales.mjs";
+import {priceLine,bestPromotion,paymentAmounts,quotePromotion,eligiblePromotions,paymentBreakdown} from "../src/domain/sales.mjs";
 test("precio exacto por peso y descuento",()=>{
  assert.deepEqual(priceLine(123456n,125n,2000),{subtotal:15432n,total:12346n});
  assert.throws(()=>priceLine(10n,0n));assert.throws(()=>priceLine(10n,1000n,10000));
@@ -34,4 +34,13 @@ test("ofertas por cantidad, NxM, resto de unidades y mejor ahorro",()=>{
  const scoped={...bundle,active:true,productId:"p",lotId:"a",startsOn:"2026-11-20",endsOn:"2026-11-30",expiryWithinDays:2};
  assert.equal(eligiblePromotions([scoped],{id:"a",productId:"p",expiresOn:"2026-11-26"},"2026-11-24").length,1);
  assert.equal(eligiblePromotions([scoped],{id:"b",productId:"p",expiresOn:"2026-11-26"},"2026-11-24").length,0);
+});
+
+test("pagos mixtos separan efectivo, vuelto y electrónicos",()=>{
+ assert.deepEqual(paymentBreakdown(1000n,"MIXED",500n,{cashCents:300n,debitCents:700n}),{cashCents:300n,debitCents:700n,creditCents:0n,transferCents:0n,tenderedCents:500n,changeCents:200n});
+ assert.throws(()=>paymentBreakdown(1000n,"MIXED",500n,{cashCents:300n,debitCents:600n}));
+ assert.throws(()=>paymentBreakdown(1000n,"MIXED",200n,{cashCents:300n,debitCents:700n}));
+ assert.throws(()=>paymentBreakdown(1000n,"MIXED",null,{debitCents:1000n}));
+ assert.equal(paymentBreakdown(1000n,"MIXED",null,{debitCents:600n,transferCents:400n}).changeCents,null);
+ assert.equal(paymentBreakdown(1000n,"TRANSFER",null).transferCents,1000n);
 });

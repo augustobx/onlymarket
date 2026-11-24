@@ -44,3 +44,19 @@ export function paymentAmounts(total,method,tendered){
  if(tendered<total)throw new Error("Efectivo recibido insuficiente");
  return {tenderedCents:tendered,changeCents:tendered-total};
 }
+
+export function paymentBreakdown(total,method,tendered,parts={}){
+ checked(total);
+ const values={cashCents:0n,debitCents:0n,creditCents:0n,transferCents:0n};
+ const fields={CASH:"cashCents",DEBIT:"debitCents",CREDIT:"creditCents",TRANSFER:"transferCents"};
+ if(method==="MIXED"){
+  for(const field of Object.values(fields))values[field]=checked(parts[field]??0n);
+  if(Object.values(values).filter(v=>v>0n).length<2)throw new Error("Elegí al menos dos medios de pago");
+  if(Object.values(values).reduce((a,b)=>a+b,0n)!==total)throw new Error("Los medios de pago deben sumar el total");
+ }else{
+  if(!Object.hasOwn(fields,method))throw new Error("Medio de pago inválido");
+  values[fields[method]]=total;
+ }
+ const cash=method==="CASH"||values.cashCents>0n;
+ return {...values,...paymentAmounts(values.cashCents,cash?"CASH":"DEBIT",tendered)};
+}

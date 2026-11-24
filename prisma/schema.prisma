@@ -264,6 +264,14 @@ model CashShift {
   @@index([tenantId, branchId, openedAt])
 }
 
+enum SalePaymentMethod {
+  CASH
+  DEBIT
+  CREDIT
+  TRANSFER
+  MIXED
+}
+
 model Sale {
   id String @default(uuid())
   tenantId String
@@ -271,7 +279,11 @@ model Sale {
   actorId String
   requestKey String
   requestHash String
-  payment PaymentMethod
+  payment SalePaymentMethod
+  cashCents BigInt @default(0)
+  debitCents BigInt @default(0)
+  creditCents BigInt @default(0)
+  transferCents BigInt @default(0)
   subtotalCents BigInt
   totalCents BigInt
   costCents BigInt
