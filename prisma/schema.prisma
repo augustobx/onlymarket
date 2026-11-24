@@ -71,8 +71,8 @@ model Membership {
   tenantId String
   userId   String
   role     Role
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-  user     User @relation(fields: [userId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user     User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   @@id([tenantId, userId])
 }
 
@@ -80,7 +80,7 @@ model Branch {
   id       String @default(uuid())
   tenantId String
   name     String
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots     Lot[]
   batches  Transformation[]
   receipts Receipt[]
@@ -101,7 +101,7 @@ model Product {
   freshnessDays Int?
   openedLifeDays Int?
   active        Boolean @default(true)
-  tenant        Tenant @relation(fields: [tenantId], references: [id])
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots          Lot[]
   promotions    Promotion[]
   saleLines     SaleLine[]
@@ -115,7 +115,7 @@ model Supplier {
   tenantId String
   name     String
   phone    String?
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots     Lot[]
   receipts Receipt[]
   payments SupplierPayment[]
@@ -137,9 +137,9 @@ model Lot {
   quantityMilli      BigInt
   remainingCostCents BigInt
   status             LotStatus @default(AVAILABLE)
-  branch             Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
-  product            Product @relation(fields: [tenantId, productId], references: [tenantId, id])
-  supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id])
+  branch             Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  product            Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   movements          StockMovement[]
   receipt            Receipt?
   adjustments        LotOperation[]
@@ -147,7 +147,7 @@ model Lot {
   promotions         Promotion[]
   inputs             Transformation[] @relation("SourceLot")
   producedById       String?
-  producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id])
+  producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@id([tenantId, id])
   @@unique([tenantId, branchId, productId, code])
   @@index([tenantId, branchId, status, expiresOn])
@@ -164,8 +164,8 @@ model Transformation {
   inputMilli      BigInt
   inputCostCents  BigInt
   createdAt       DateTime @default(now())
-  branch          Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
-  sourceLot       Lot @relation("SourceLot", fields: [tenantId, sourceLotId], references: [tenantId, id])
+  branch          Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  sourceLot       Lot @relation("SourceLot", fields: [tenantId, sourceLotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   outputs         Lot[] @relation("ProducedLots")
   movements       StockMovement[]
   @@id([tenantId, id])
@@ -178,15 +178,15 @@ model StockMovement {
   lotId            String
   transformationId String?
   saleId           String?
-  sale             Sale? @relation(fields: [tenantId, saleId], references: [tenantId, id])
+  sale             Sale? @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   actorId          String
   kind             MovementKind
   deltaMilli       BigInt
   deltaCostCents   BigInt
   reason           String
   createdAt        DateTime @default(now())
-  lot              Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
-  transformation   Transformation? @relation(fields: [tenantId, transformationId], references: [tenantId, id])
+  lot              Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  transformation   Transformation? @relation(fields: [tenantId, transformationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@index([tenantId, lotId, createdAt])
 }
 
@@ -220,9 +220,9 @@ model Receipt {
   quantityMilli BigInt
   totalCostCents BigInt
   createdAt DateTime @default(now())
-  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
-  supplier Supplier @relation(fields: [tenantId, supplierId], references: [tenantId, id])
-  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  supplier Supplier @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@id([tenantId, id])
   @@unique([tenantId, requestKey])
   @@unique([tenantId, lotId])
@@ -247,7 +247,7 @@ model CashShift {
   closedAt DateTime?
   countedCents BigInt?
   expectedCents BigInt?
-  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   sales Sale[]
   @@id([tenantId, id])
   @@unique([tenantId, activeKey])
@@ -268,7 +268,7 @@ model Sale {
   tenderedCents BigInt?
   changeCents BigInt?
   createdAt DateTime @default(now())
-  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id])
+  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lines SaleLine[]
   movements StockMovement[]
   @@id([tenantId, id])
@@ -290,9 +290,9 @@ model SaleLine {
   costCents BigInt
   discountBps Int
   promotionId String?
-  sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id])
-  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
-  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@index([tenantId, saleId])
 }
 
@@ -307,8 +307,8 @@ model Promotion {
   startsOn DateTime @db.Date
   endsOn DateTime @db.Date
   active Boolean @default(true)
-  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
-  lot Lot? @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot? @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@id([tenantId, id])
   @@index([tenantId, productId, active])
 }
@@ -325,7 +325,7 @@ model LotOperation {
   costCents BigInt @default(0)
   reason String
   createdAt DateTime @default(now())
-  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   @@id([tenantId, id])
   @@unique([tenantId, requestKey])
   @@index([tenantId, lotId, createdAt])
@@ -342,7 +342,7 @@ model Expense {
  amountCents BigInt
  occurredOn DateTime @db.Date
  createdAt DateTime @default(now())
- tenant Tenant @relation(fields: [tenantId], references: [id])
+ tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
  @@id([tenantId,id])
  @@unique([tenantId,requestKey])
  @@index([tenantId,occurredOn])
@@ -360,7 +360,7 @@ model SupplierPayment {
  payment PaymentMethod
  reference String?
  createdAt DateTime @default(now())
- supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id])
+ supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
  @@id([tenantId,id])
  @@unique([tenantId,requestKey])
  @@index([tenantId,supplierId,occurredOn])
