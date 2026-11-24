@@ -1,0 +1,21 @@
+import Link from "next/link";
+import {db} from "../../src/server/db";
+import {requireSession} from "../../src/server/auth";
+import {classifyLot} from "../../src/domain/inventory.mjs";
+import {localDay} from "../../src/domain/parse.mjs";
+import {Shell,Field,amount,money,states,sectors} from "../ui";
+import Refresh from "./refresh";
+export const dynamic="force-dynamic";
+export default async function Page({searchParams}:{searchParams:Promise<{branch?:string;sector?:string;state?:string}>}){
+ const s=await requireSession();if(s.role==="CASHIER")return <Shell title="Alertas"/>;
+ const query=await searchParams,today=localDay(),tenantId=s.tenantId;
+ const [lots,branches]=await Promise.all([db.lot.findMany({where:{tenantId,quantityMilli:{gt:0n}},include:{product:true,branch:true},orderBy:[{expiresOn:"asc"},{receivedAt:"asc"}]}),db.branch.findMany({where:{tenantId}})]);
+ const all=lots.map(l=>{const expiry=l.expiresOn?.toISOString().slice(0,10)??null,review=l.reviewAt?localDay(l.reviewAt):null;
+ const state=classifyLot({today,expiresOn:expiry,reviewOn:review,alertDays:l.product.alertDays,status:l.status,quantityMilli:l.quantityMilli});
+ const reason=state==="BLOCKED"?(expiry&&expiry<=today?"Vencimiento alcanzado":"Bloqueo manual"):state==="REVIEW"?(review&&review<=today?"Control de frescura pendiente":"Revisión manual pendiente"):"Vence dentro del plazo de aviso";
+ return {l,state,expiry,review,reason};}).filter(x=>["BLOCKED","REVIEW","EXPIRING"].includes(x.state));
+ const priority:Record<string,number>={BLOCKED:0,REVIEW:1,EXPIRING:2};
+ const filtered=all.filter(x=>(!query.branch||x.l.branchId===query.branch)&&(!query.sector||x.l.product.sector===query.sector)&&(!query.state||x.state===query.state)).sort((a,b)=>priority[a.state]-priority[b.state]||(a.expiry??"9999").localeCompare(b.expiry??"9999"));
+ const metrics=["BLOCKED","REVIEW","EXPIRING"].map(k=>({k,count:all.filter(x=>x.state===k).length,value:all.filter(x=>x.state===k).reduce((sum,x)=>sum+x.l.remainingCostCents,0n)}));
+ return <Shell title="Centro de alertas"><section className="metrics">{metrics.map(m=><article key={m.k}><small>{states[m.k]}</small><strong>{m.count} lotes</strong><small>Valor de stock: {money(m.value)}</small></article>)}<article><small>Capital sujeto a atención</small><strong>{money(metrics.reduce((a,m)=>a+m.value,0n))}</strong></article></section><section className="panel"><h2>Mercadería que requiere acción</h2><p>Actualización automática cada minuto mientras esta pantalla está abierta. Última consulta: {new Date().toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}. Los avisos no certifican aptitud alimentaria. No son notificaciones push.</p><form method="get" className="formgrid"><Field label="Sucursal"><select name="branch" defaultValue={query.branch??""}><option value="">Todas</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></Field><Field label="Sector"><select name="sector" defaultValue={query.sector??""}><option value="">Todos</option>{Object.entries(sectors).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field><Field label="Estado"><select name="state" defaultValue={query.state??""}><option value="">Todos</option>{metrics.map(m=><option key={m.k} value={m.k}>{states[m.k]}</option>)}</select></Field><button>Filtrar</button></form><Refresh/><div className="tablewrap"><table><thead><tr><th>Producto / lote</th><th>Sucursal</th><th>Estado y motivo</th><th>Fecha de revisión / vencimiento</th><th>Stock</th><th>Valor</th><th>Acción</th></tr></thead><tbody>{filtered.map(({l,state,reason,review,expiry})=><tr key={l.id}><td>{l.product.name}<small>{l.code}</small></td><td>{l.branch.name}</td><td><span className={"status "+state}>{states[state]}</span><small>{reason}</small></td><td>{review??"—"}<small>Vence: {expiry??"Sin fecha impresa"}</small></td><td>{amount(l.quantityMilli,l.product.unit)}</td><td>{money(l.remainingCostCents)}</td><td><Link href={"/inventario?lot="+encodeURIComponent(l.id)}>Gestionar lote</Link>{state==="EXPIRING"&&["OWNER","MANAGER"].includes(s.role)&&<small><Link href={"/promociones?lot="+encodeURIComponent(l.id)}>Crear promoción</Link></small>}</td></tr>)}</tbody></table></div>{!filtered.length&&<p>No hay alertas con estos filtros.</p>}</section></Shell>;
+}
