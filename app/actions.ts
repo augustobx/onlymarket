@@ -1,6 +1,7 @@
 "use server";
 import {redirect} from "next/navigation";
 import {revalidatePath} from "next/cache";
+import {licenseActive} from "../src/domain/settings.mjs";
 import {db} from "../src/server/db";
 import {login,logout,requireSession} from "../src/server/auth";
 import {decimal,textField,localDay} from "../src/domain/parse.mjs";
@@ -27,8 +28,8 @@ async function manager(){
  const s=await requireSession();if(!allowed.includes(s.role))redirect("/?error=Sin%20permisos");return s;
 }
 async function authorize(tx:Prisma.TransactionClient,s:Awaited<ReturnType<typeof manager>>){
- const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true}});
- if(!m?.user.active||!allowed.includes(m.role))throw new Error("Sin permisos");
+ const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true,tenant:true}});
+ if(!m?.user.active||!licenseActive(m.tenant,localDay())||!allowed.includes(m.role))throw new Error("Sin permisos");
 }
 export async function loginAction(f:FormData){
  const ok=await login(str(f,"email"),str(f,"password"),str(f,"slug"));
@@ -118,8 +119,8 @@ export async function bulkPrice(f:FormData){
  if(!["BUTCHERY","DELI","PRODUCE","GROCERY","OTHER"].includes(sector)||!["UP","DOWN"].includes(direction)||bps>=10000n)throw new Error("Porcentaje o sector inválido (menor a 100%)");
  if(str(f,"confirm")!=="yes")throw new Error("Confirmá la actualización masiva");
  await db.$transaction(async tx=>{
- const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true}});
- if(!m?.user.active||!["OWNER","MANAGER"].includes(m.role))throw new Error("Sin permisos");
+ const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true,tenant:true}});
+ if(!m?.user.active||!licenseActive(m.tenant,localDay())||!["OWNER","MANAGER"].includes(m.role))throw new Error("Sin permisos");
  const products=await tx.product.findMany({where:{tenantId:s.tenantId,active:true,sector:sector as "BUTCHERY"|"DELI"|"PRODUCE"|"GROCERY"|"OTHER"}});
  if(products.length>500)throw new Error("Máximo 500 productos por actualización");
  const factor=direction==="UP"?10000n+bps:10000n-bps;

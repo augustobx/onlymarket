@@ -1,3 +1,4 @@
+import {licenseActive} from "../domain/settings.mjs";
 import {localDay} from "../domain/parse.mjs";
 import {createHash} from "node:crypto";
 import {consumeCost,planTransformation,classifyLot} from "../domain/inventory.mjs";
@@ -29,12 +30,12 @@ export async function transformLot(prisma, session, input) {
   for(let attempt=0;attempt<3;attempt++){
     try{
       return await prisma.$transaction(async tx=>{
-        const member=await tx.membership.findUnique({where:{tenantId_userId:{tenantId,userId:actorId}},include:{user:true}});
-        if(!member?.user.active||!["OWNER","MANAGER","INVENTORY"].includes(member.role)) throw new Error("Sin permisos");
+        const member=await tx.membership.findUnique({where:{tenantId_userId:{tenantId,userId:actorId}},include:{user:true,tenant:true}});
+        if(!member?.user.active||!licenseActive(member.tenant,localDay())||!["OWNER","MANAGER","INVENTORY"].includes(member.role)) throw new Error("Sin permisos");
         const prior=await tx.transformation.findUnique({where:{tenantId_requestKey:{tenantId,requestKey:request.requestKey}},include:{outputs:true}});
         if(prior){if(prior.requestHash!==requestHash)throw new Error("Clave de operación ya utilizada");return prior;}
         const source=await tx.lot.findUnique({where:{tenantId_id:{tenantId,id:request.sourceLotId}},include:{product:true}});
-        if(!source||source.branchId!==request.branchId||source.product.unit!=="KG")throw new Error("Lote origen inválido");
+        if(!source||source.branchId!==request.branchId||source.product.unit!=="KG"||!source.product.active)throw new Error("Lote origen inválido");
         const today=localDay(new Date());
         if(!["AVAILABLE","EXPIRING"].includes(classifyLot({today,expiresOn:dateOnly(source.expiresOn),
           reviewOn:source.reviewAt?localDay(source.reviewAt):null,alertDays:source.product.alertDays,status:source.status,quantityMilli:source.quantityMilli})))throw new Error("Lote no apto");

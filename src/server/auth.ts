@@ -16,21 +16,20 @@ export async function currentSession(){
   return {tenantId:session.tenantId,actorUserId:session.userId,role:member.role,tenantName:session.tenant.name,email:session.user.email,profile:session.tenant.profile,plan:session.tenant.plan};
 }
 export async function requireSession(){const s=await currentSession();if(!s)redirect("/login");return s;}
-async function allowAttempt(email:string,slug:string){
-  const key=tokenHash(email+"\n"+slug);
+async function allowAttempt(key:string,limit:number){
   // Atomic PostgreSQL upsert: maximum 8 attempts per 15-minute identity window.
   const rows=await db.$queryRaw<{attempts:number}[]>`
     INSERT INTO "LoginLimit" ("key","attempts","windowStart") VALUES (${key},1,now())
     ON CONFLICT ("key") DO UPDATE SET
-      "attempts"=CASE WHEN "LoginLimit"."windowStart"<now()-interval '15 minutes' THEN 1 ELSE LEAST("LoginLimit"."attempts"+1,9) END,
+      "attempts"=CASE WHEN "LoginLimit"."windowStart"<now()-interval '15 minutes' THEN 1 ELSE LEAST("LoginLimit"."attempts"+1,${limit+1}) END,
       "windowStart"=CASE WHEN "LoginLimit"."windowStart"<now()-interval '15 minutes' THEN now() ELSE "LoginLimit"."windowStart" END
     RETURNING "attempts"`;
-  return rows[0]?.attempts<=8;
+  return (rows[0]?.attempts??limit+1)<=limit;
 }
 export async function login(email:string,password:string,slug:string){
   email=email.trim().toLowerCase();slug=slug.trim().toLowerCase();
   if(email.length>254||slug.length>64||password.length>128||!email||!slug)return false;
-  if(!await allowAttempt(email,slug))return false;
+  if(!await allowAttempt(tokenHash("commerce:global"),300)||!await allowAttempt(tokenHash("commerce:email:"+email),15)||!await allowAttempt(tokenHash(email+"\n"+slug),8))return false;
   const user=await db.user.findUnique({where:{email}});
   const valid=await verifyPassword(password,user?.passwordHash??DUMMY);
   if(!valid||!user?.active)return false;
