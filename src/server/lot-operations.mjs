@@ -23,7 +23,7 @@ export async function lotOperation(prisma,s,input){
    if(!["AVAILABLE","EXPIRING"].includes(state))throw new Error("Lote no apto");
    if(!["DELI","BUTCHERY"].includes(lot.product.sector))throw new Error("Solo piezas de carnicería o fiambrería");
    const expiresOn=openedExpiry({today,printedExpiry:expiry,lifeDays:lot.product.openedLifeDays});
-   await tx.lot.update({where:{tenantId_id:{tenantId,id}},data:{openedAt:new Date(),expiresOn}});
+   await tx.lot.update({where:{tenantId_id:{tenantId,id}},data:{openedAt:new Date(),printedExpiresOn:lot.printedExpiresOn??lot.expiresOn,expiresOn}});
   }else{
    if(kind==="GIFT"&&!["AVAILABLE","EXPIRING"].includes(state))throw new Error("No se puede regalar mercadería no apta");
    if(lot.product.unit==="UNIT"&&q%1000n)throw new Error("Se requieren unidades enteras");

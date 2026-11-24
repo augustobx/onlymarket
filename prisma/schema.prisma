@@ -55,6 +55,7 @@ model Tenant {
   sessions  Session[]
   products  Product[]
   suppliers Supplier[]
+  expenses Expense[]
 }
 
 model User {
@@ -117,6 +118,7 @@ model Supplier {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
   lots     Lot[]
   receipts Receipt[]
+  payments SupplierPayment[]
   @@id([tenantId, id])
 }
 
@@ -129,6 +131,7 @@ model Lot {
   code               String
   receivedAt         DateTime @default(now())
   expiresOn          DateTime? @db.Date
+  printedExpiresOn   DateTime? @db.Date
   openedAt           DateTime?
   reviewAt           DateTime?
   quantityMilli      BigInt
@@ -326,4 +329,39 @@ model LotOperation {
   @@id([tenantId, id])
   @@unique([tenantId, requestKey])
   @@index([tenantId, lotId, createdAt])
+}
+
+model Expense {
+ id String @default(uuid())
+ tenantId String
+ actorId String
+ requestKey String
+ requestHash String
+ category String
+ description String
+ amountCents BigInt
+ occurredOn DateTime @db.Date
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields: [tenantId], references: [id])
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,occurredOn])
+}
+
+model SupplierPayment {
+ id String @default(uuid())
+ tenantId String
+ supplierId String
+ actorId String
+ requestKey String
+ requestHash String
+ amountCents BigInt
+ occurredOn DateTime @db.Date
+ payment PaymentMethod
+ reference String?
+ createdAt DateTime @default(now())
+ supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id])
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,supplierId,occurredOn])
 }

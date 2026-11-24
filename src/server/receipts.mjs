@@ -27,7 +27,7 @@ export async function receiveLot(prisma,session,input){
       // For produce, missing freshness policy requires review rather than silent clearance.
       const reviewAt=product.freshnessDays!=null?new Date(Date.now()+product.freshnessDays*86400000):null;
       const status=product.sector==="PRODUCE"&&!reviewAt&&!expiresOn?"REVIEW":"AVAILABLE";
-      const lot=await tx.lot.create({data:{tenantId,branchId,supplierId,productId,code,quantityMilli,remainingCostCents:totalCostCents,expiresOn,reviewAt,status}});
+      const lot=await tx.lot.create({data:{tenantId,branchId,supplierId,productId,code,quantityMilli,remainingCostCents:totalCostCents,expiresOn,printedExpiresOn:expiresOn,reviewAt,status}});
       const receipt=await tx.receipt.create({data:{tenantId,branchId,supplierId,lotId:lot.id,actorId,requestKey,requestHash,invoiceRef,quantityMilli,totalCostCents}});
       await tx.stockMovement.create({data:{tenantId,lotId:lot.id,actorId,kind:"RECEIPT",deltaMilli:quantityMilli,deltaCostCents:totalCostCents,reason:"Recepción "+receipt.id}});
       return receipt;
