@@ -10,7 +10,7 @@ import type {Prisma} from "@prisma/client";
 
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
 const allowed=["OWNER","MANAGER","INVENTORY"];
-function days(v:string,optional=false){if(optional&&!v)return null;if(!/^\d{1,3}$/.test(v)||Number(v)>365)throw new Error("Días inválidos");return Number(v);}
+function days(v:string,optional=false){if(optional&&!v)return null;if(!/^\d{1,3}$/.test(v)||Number(v)>365||(optional&&Number(v)<1))throw new Error("Días inválidos");return Number(v);}
 function knownError(error:unknown){
  if(error instanceof Error&&!('code' in error)&&!error.message.includes("\n")&&error.message.length<=160)return error.message;
  if(error&&typeof error==="object"&&"code" in error&&error.code==="P2002")return "Ya existe un registro con esos datos";
@@ -87,5 +87,46 @@ export async function reviewAction(f:FormData){
    await tx.lot.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{status:decision as "AVAILABLE"|"BLOCKED"|"REVIEW",reviewAt:decision==="AVAILABLE"?new Date(Date.now()+86400000):lot.reviewAt}});
    await tx.stockMovement.create({data:{tenantId:s.tenantId,lotId:id,actorId:s.actorUserId,kind:"ADJUSTMENT",deltaMilli:0n,deltaCostCents:0n,reason:"Revisión "+decision+": "+reason}});
   },{isolationLevel:"Serializable"});
+ });
+}
+
+export async function editProduct(f:FormData){
+ const s=await manager();
+ await write("/catalogo",async()=>{
+ const id=textField(str(f,"id"),"Producto"),name=textField(str(f,"name"),"Nombre"),sku=textField(str(f,"sku"),"SKU",64);
+ const barcode=textField(str(f,"barcode"),"Código de barras",64,true)||null;
+ const price=decimal(str(f,"price"),2,"Precio",{allowZero:true});
+ const alertDays=days(str(f,"alertDays"))!,freshnessDays=days(str(f,"freshnessDays"),true),openedLifeDays=days(str(f,"openedLifeDays"),true);
+ await db.$transaction(async tx=>{
+   await authorize(tx,s);
+   const p=await tx.product.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}}});if(!p)throw new Error("Producto inexistente");
+   const old={name:p.name,sku:p.sku,barcode:p.barcode,price:p.salePriceCents.toString(),alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,active:p.active};
+   const active=str(f,"active")==="yes";
+   await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,sku,barcode,salePriceCents:price,alertDays,freshnessDays,openedLifeDays,active}});
+   await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:id,actorId:s.actorUserId,previous:JSON.stringify(old),next:JSON.stringify({name,sku,barcode,price:price.toString(),alertDays,freshnessDays,openedLifeDays,active})}});
+ },{isolationLevel:"Serializable"});
+ revalidatePath("/pos");revalidatePath("/inventario");
+ });
+}
+export async function bulkPrice(f:FormData){
+ const s=await requireSession();
+ await write("/catalogo",async()=>{
+ const sector=str(f,"sector"),direction=str(f,"direction"),bps=decimal(str(f,"percent"),2,"Porcentaje");
+ if(!["BUTCHERY","DELI","PRODUCE","GROCERY","OTHER"].includes(sector)||!["UP","DOWN"].includes(direction)||bps>=10000n)throw new Error("Porcentaje o sector inválido (menor a 100%)");
+ if(str(f,"confirm")!=="yes")throw new Error("Confirmá la actualización masiva");
+ await db.$transaction(async tx=>{
+ const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true}});
+ if(!m?.user.active||!["OWNER","MANAGER"].includes(m.role))throw new Error("Sin permisos");
+ const products=await tx.product.findMany({where:{tenantId:s.tenantId,active:true,sector:sector as "BUTCHERY"|"DELI"|"PRODUCE"|"GROCERY"|"OTHER"}});
+ if(products.length>500)throw new Error("Máximo 500 productos por actualización");
+ const factor=direction==="UP"?10000n+bps:10000n-bps;
+ for(const p of products){
+ const next=(p.salePriceCents*factor+5000n)/10000n;
+ if(next>9223372036854775807n)throw new Error("Precio fuera de rango");
+ await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id:p.id}},data:{salePriceCents:next}});
+ await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:p.id,actorId:s.actorUserId,previous:JSON.stringify({price:p.salePriceCents.toString()}),next:JSON.stringify({price:next.toString(),bulk:true})}});
+ }
+ },{isolationLevel:"Serializable",timeout:20000});
+ revalidatePath("/pos");
  });
 }

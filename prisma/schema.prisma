@@ -365,3 +365,14 @@ model SupplierPayment {
  @@unique([tenantId,requestKey])
  @@index([tenantId,supplierId,occurredOn])
 }
+
+model CatalogChange {
+ id String @id @default(uuid())
+ tenantId String
+ productId String
+ actorId String
+ previous String
+ next String
+ createdAt DateTime @default(now())
+ @@index([tenantId,productId,createdAt])
+}
