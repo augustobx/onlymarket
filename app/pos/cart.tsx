@@ -34,7 +34,7 @@ export default function Cart({lots,shiftId,requestKey,customers,weightPrefix,mem
  }
  const rawRows=Object.entries(cart).sort(([a],[b])=>a.localeCompare(b)).flatMap(([id,q])=>{const lot=byId.get(id);if(!lot)return [];const n=BigInt(q);return [{lot,n,...quotePromotion(BigInt(lot.price),n,lot.unit,lot.promotions)}];});
  const quotes=basketQuote(rawRows.map(r=>({productId:r.lot.productId,unit:r.lot.unit,unitPrice:BigInt(r.lot.price),quantity:r.n,price:r})),combos,customerId?memberBps:0);
- const rows=rawRows.map((r,i)=>({...r,...quotes[i]}));
+ const rows=rawRows.map((r,i)=>({...r,...quotes[i],subtotal:BigInt(quotes[i].subtotal),total:BigInt(quotes[i].total)}));
  const total=rows.reduce((a,r)=>a+r.total,0n);
  let cash:bigint|null=null;try{cash=decimal(tendered,2,"Efectivo",{allowZero:true});}catch{}
  const methods=[["cashCents","Efectivo asignado"],["debitCents","Débito asignado"],["creditCents","Crédito asignado"],["transferCents","Transferencia asignada"]] as const;
