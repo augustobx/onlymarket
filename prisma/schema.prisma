@@ -1,0 +1,612 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Unit {
+  KG
+  UNIT
+}
+
+enum Sector {
+  BUTCHERY
+  DELI
+  PRODUCE
+  GROCERY
+  OTHER
+}
+
+enum LotStatus {
+  AVAILABLE
+  REVIEW
+  BLOCKED
+  EXHAUSTED
+}
+
+enum MovementKind {
+  RECEIPT
+  TRANSFORM_IN
+  TRANSFORM_OUT
+  SALE
+  RETURN
+  WASTE
+  GIFT
+  ADJUSTMENT
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  INVENTORY
+  CASHIER
+}
+
+model Tenant {
+  id        String @id @default(uuid())
+  name      String
+  slug      String @unique
+  createdAt DateTime @default(now())
+  branches  Branch[]
+  members   Membership[]
+  sessions  Session[]
+  products  Product[]
+  suppliers Supplier[]
+  expenses Expense[]
+  templates TransformTemplate[]
+  profile String @default("SUPERMARKET")
+  plan String @default("PILOT")
+  licenseUntil DateTime? @db.Date
+  suspended Boolean @default(false)
+  weightPrefix String?
+  pointsEveryCents BigInt @default(100000)
+  memberDiscountBps Int @default(0)
+  customers Customer[]
+  combos Combo[]
+}
+
+model User {
+  id           String @id @default(uuid())
+  email        String @unique
+  passwordHash String
+  active       Boolean @default(true)
+  memberships  Membership[]
+  sessions     Session[]
+}
+
+model Membership {
+  tenantId String
+  userId   String
+  role     Role
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user     User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId, userId])
+}
+
+model Branch {
+  id       String @default(uuid())
+  tenantId String
+  name     String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lots     Lot[]
+  batches  Transformation[]
+  receipts Receipt[]
+  purchases Purchase[]
+  cashShifts CashShift[]
+  stockTargets StockTarget[]
+  @@id([tenantId, id])
+}
+
+model Product {
+  id            String @default(uuid())
+  tenantId      String
+  sku           String
+  name          String
+  barcode       String?
+  unit          Unit
+  sector        Sector
+  salePriceCents BigInt @default(0)
+  alertDays     Int @default(3)
+  freshnessDays Int?
+  openedLifeDays Int?
+  weightCode String?
+  active        Boolean @default(true)
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lots          Lot[]
+  promotions    Promotion[]
+  saleLines     SaleLine[]
+  stockTargets StockTarget[]
+  @@id([tenantId, id])
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
+  @@unique([tenantId, weightCode])
+}
+
+model Supplier {
+  id       String @default(uuid())
+  tenantId String
+  name     String
+  phone    String?
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lots     Lot[]
+  receipts Receipt[]
+  purchases Purchase[]
+  payments SupplierPayment[]
+  @@id([tenantId, id])
+}
+
+model Lot {
+  id                 String @default(uuid())
+  tenantId           String
+  branchId           String
+  productId          String
+  supplierId         String?
+  code               String
+  receivedAt         DateTime @default(now())
+  expiresOn          DateTime? @db.Date
+  printedExpiresOn   DateTime? @db.Date
+  openedAt           DateTime?
+  reviewAt           DateTime?
+  quantityMilli      BigInt
+  remainingCostCents BigInt
+  status             LotStatus @default(AVAILABLE)
+  branch             Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  product            Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  movements          StockMovement[]
+  receipt            Receipt?
+  adjustments        LotOperation[]
+  returnedStock SaleReturn[]
+  controls StockControl[] @relation("ControlSource")
+  transfersIn StockControl[] @relation("ControlDestination")
+  saleLines          SaleLine[]
+  promotions         Promotion[]
+  inputs             Transformation[] @relation("SourceLot")
+  producedById       String?
+  producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId, id])
+  @@unique([tenantId, branchId, productId, code])
+  @@index([tenantId, branchId, status, expiresOn])
+}
+
+model Transformation {
+  id              String @default(uuid())
+  tenantId        String
+  branchId        String
+  sourceLotId     String
+  actorId         String
+  requestKey      String
+  requestHash     String
+  inputMilli      BigInt
+  inputCostCents  BigInt
+  createdAt       DateTime @default(now())
+  branch          Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  sourceLot       Lot @relation("SourceLot", fields: [tenantId, sourceLotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  outputs         Lot[] @relation("ProducedLots")
+  movements       StockMovement[]
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+}
+
+model StockMovement {
+  id               String @id @default(uuid())
+  tenantId         String
+  lotId            String
+  transformationId String?
+  saleId           String?
+  sale             Sale? @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  actorId          String
+  kind             MovementKind
+  deltaMilli       BigInt
+  deltaCostCents   BigInt
+  reason           String
+  createdAt        DateTime @default(now())
+  lot              Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  transformation   Transformation? @relation(fields: [tenantId, transformationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@index([tenantId, lotId, createdAt])
+}
+
+model Session {
+  tokenHash String @id
+  userId String
+  tenantId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model LoginLimit {
+  key String @id
+  attempts Int
+  windowStart DateTime
+}
+
+model Receipt {
+  id String @default(uuid())
+  tenantId String
+  branchId String
+  supplierId String
+  lotId String
+  actorId String
+  requestKey String
+  requestHash String
+  invoiceRef String?
+  purchaseId String?
+  purchase Purchase? @relation(fields: [tenantId,purchaseId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+  quantityMilli BigInt
+  totalCostCents BigInt
+  createdAt DateTime @default(now())
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  supplier Supplier @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@unique([tenantId, lotId])
+  @@index([tenantId, supplierId, createdAt])
+}
+
+enum PaymentMethod {
+  CASH
+  DEBIT
+  CREDIT
+  TRANSFER
+}
+
+model CashShift {
+  id String @default(uuid())
+  tenantId String
+  branchId String
+  actorId String
+  activeKey String?
+  openingCents BigInt
+  openedAt DateTime @default(now())
+  closedAt DateTime?
+  countedCents BigInt?
+  expectedCents BigInt?
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  sales Sale[]
+  cashMovements CashMovement[]
+  returns SaleReturn[]
+  @@id([tenantId, id])
+  @@unique([tenantId, activeKey])
+  @@index([tenantId, branchId, openedAt])
+}
+
+enum SalePaymentMethod {
+  CASH
+  DEBIT
+  CREDIT
+  TRANSFER
+  MIXED
+}
+
+model Sale {
+  id String @default(uuid())
+  tenantId String
+  shiftId String
+  actorId String
+  requestKey String
+  requestHash String
+  payment SalePaymentMethod
+  cashCents BigInt @default(0)
+  debitCents BigInt @default(0)
+  creditCents BigInt @default(0)
+  transferCents BigInt @default(0)
+  subtotalCents BigInt
+  totalCents BigInt
+  costCents BigInt
+  tenderedCents BigInt?
+  changeCents BigInt?
+  createdAt DateTime @default(now())
+  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lines SaleLine[]
+  customerId String?
+  pointsRateCents BigInt?
+  customer Customer? @relation(fields:[tenantId,customerId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+  cancellation SaleCancellation?
+  returns SaleReturn[]
+  movements StockMovement[]
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@index([tenantId, createdAt])
+}
+
+model SaleLine {
+  id String @id @default(uuid())
+  tenantId String
+  saleId String
+  lotId String
+  productId String
+  productName String
+  quantityMilli BigInt
+  unitPriceCents BigInt
+  subtotalCents BigInt
+  totalCents BigInt
+  costCents BigInt
+  discountBps Int
+  promotionId String?
+  promotionLabel String?
+  sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  returns SaleReturn[]
+  @@unique([tenantId, id])
+  @@index([tenantId, saleId])
+}
+
+model Promotion {
+  id String @default(uuid())
+  tenantId String
+  productId String
+  lotId String?
+  name String
+  discountBps Int
+  minimumMilli BigInt?
+  buyUnits Int?
+  payUnits Int?
+  expiryWithinDays Int?
+  startsOn DateTime @db.Date
+  endsOn DateTime @db.Date
+  active Boolean @default(true)
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  lot Lot? @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId, id])
+  @@index([tenantId, productId, active])
+}
+
+model LotOperation {
+  id String @default(uuid())
+  tenantId String
+  lotId String
+  actorId String
+  requestKey String
+  requestHash String
+  kind String
+  quantityMilli BigInt @default(0)
+  costCents BigInt @default(0)
+  reason String
+  createdAt DateTime @default(now())
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@index([tenantId, lotId, createdAt])
+}
+
+model Expense {
+ id String @default(uuid())
+ tenantId String
+ actorId String
+ requestKey String
+ requestHash String
+ category String
+ description String
+ amountCents BigInt
+ occurredOn DateTime @db.Date
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,occurredOn])
+}
+
+model SupplierPayment {
+ id String @default(uuid())
+ tenantId String
+ supplierId String
+ actorId String
+ requestKey String
+ requestHash String
+ amountCents BigInt
+ occurredOn DateTime @db.Date
+ payment PaymentMethod
+ reference String?
+ createdAt DateTime @default(now())
+ supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,supplierId,occurredOn])
+}
+
+model CatalogChange {
+ id String @id @default(uuid())
+ tenantId String
+ productId String
+ actorId String
+ previous String
+ next String
+ createdAt DateTime @default(now())
+ @@index([tenantId,productId,createdAt])
+}
+
+enum CashMovementKind {
+  IN
+  OUT
+}
+
+model CashMovement {
+  id String @default(uuid())
+  tenantId String
+  shiftId String
+  actorId String
+  requestKey String
+  requestHash String
+  kind CashMovementKind
+  amountCents BigInt
+  reason String
+  createdAt DateTime @default(now())
+  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId,id])
+  @@unique([tenantId,requestKey])
+  @@index([tenantId,shiftId,createdAt])
+}
+
+model SaleCancellation {
+  id String @default(uuid())
+  tenantId String
+  saleId String
+  actorId String
+  requestKey String
+  requestHash String
+  reason String
+  disposition String
+  createdAt DateTime @default(now())
+  sale Sale @relation(fields: [tenantId,saleId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+  @@id([tenantId,id])
+  @@unique([tenantId,saleId])
+  @@unique([tenantId,requestKey])
+}
+
+model TransformTemplate {
+ id String @default(uuid())
+ tenantId String
+ name String
+ lines Json
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,name])
+}
+
+model Purchase {
+ id String @default(uuid())
+ tenantId String
+ branchId String
+ supplierId String
+ actorId String
+ requestKey String
+ requestHash String
+ invoiceRef String
+ totalCostCents BigInt
+ createdAt DateTime @default(now())
+ branch Branch @relation(fields: [tenantId,branchId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+ supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+ receipts Receipt[]
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@unique([tenantId,supplierId,invoiceRef])
+ @@index([tenantId,createdAt])
+}
+
+model PlatformAdmin {
+ id String @id @default(uuid())
+ email String @unique
+ passwordHash String
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ sessions PlatformSession[]
+ audits PlatformAudit[]
+}
+model PlatformSession {
+ tokenHash String @id
+ adminId String
+ expiresAt DateTime
+ createdAt DateTime @default(now())
+ admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+ @@index([expiresAt])
+}
+model PlatformAudit {
+ id String @id @default(uuid())
+ adminId String
+ action String
+ tenantId String
+ detail String
+ createdAt DateTime @default(now())
+ admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ @@index([createdAt])
+}
+
+model StockControl {
+ id String @default(uuid())
+ tenantId String
+ sourceLotId String
+ destinationLotId String?
+ actorId String
+ requestKey String
+ requestHash String
+ kind String
+ beforeMilli BigInt
+ afterMilli BigInt
+ quantityMilli BigInt
+ costCents BigInt
+ reason String
+ createdAt DateTime @default(now())
+ source Lot @relation("ControlSource",fields:[tenantId,sourceLotId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ destination Lot? @relation("ControlDestination",fields:[tenantId,destinationLotId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,sourceLotId,createdAt])
+ @@index([tenantId,destinationLotId])
+}
+model StockTarget {
+ tenantId String
+ branchId String
+ productId String
+ minimumMilli BigInt
+ targetMilli BigInt
+ branch Branch @relation(fields:[tenantId,branchId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ product Product @relation(fields:[tenantId,productId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,branchId,productId])
+}
+
+model SaleReturn {
+ id String @default(uuid())
+ tenantId String
+ saleId String
+ saleLineId String
+ shiftId String
+ returnedLotId String?
+ actorId String
+ requestKey String
+ requestHash String
+ quantityMilli BigInt
+ refundCents BigInt
+ costCents BigInt
+ cashCents BigInt
+ debitCents BigInt
+ creditCents BigInt
+ transferCents BigInt
+ disposition String
+ reason String
+ createdAt DateTime @default(now())
+ sale Sale @relation(fields:[tenantId,saleId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ line SaleLine @relation(fields:[tenantId,saleLineId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ shift CashShift @relation(fields:[tenantId,shiftId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ returnedLot Lot? @relation(fields:[tenantId,returnedLotId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,saleId])
+ @@index([tenantId,saleLineId])
+ @@index([tenantId,shiftId])
+ @@index([tenantId,createdAt])
+}
+
+model Customer {
+ id String @default(uuid())
+ tenantId String
+ code String
+ name String
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+ sales Sale[]
+ @@id([tenantId,id])
+ @@unique([tenantId,code])
+}
+model Combo {
+ id String @default(uuid())
+ tenantId String
+ name String
+ items Json
+ priceCents BigInt
+ startsOn DateTime @db.Date
+ endsOn DateTime @db.Date
+ active Boolean @default(true)
+ tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@index([tenantId,active])
+}

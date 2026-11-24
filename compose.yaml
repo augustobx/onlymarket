@@ -1,0 +1,44 @@
+name: onlymarket
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: onlymarket
+      POSTGRES_USER: onlymarket
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - onlymarket_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onlymarket -d onlymarket"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+  app:
+    build: .
+    container_name: onlymarket-web
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://onlymarket:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/onlymarket
+      TZ: America/Argentina/Buenos_Aires
+      PLATFORM_ADMIN_ENABLED: ${PLATFORM_ADMIN_ENABLED:-false}
+      HUB_INTEGRATION_TOKEN: ${HUB_INTEGRATION_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [private, proxy]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+volumes:
+  onlymarket_data:
+networks:
+  private:
+    internal: true
+  proxy:
+    external: true
+    name: proxy

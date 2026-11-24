@@ -1,0 +1,16 @@
+import {randomUUID} from "node:crypto";
+import {db} from "../../src/server/db";
+import {requireSession} from "../../src/server/auth";
+import {deleteTemplate} from "../actions";
+import {classifyLot} from "../../src/domain/inventory.mjs";
+import {localDay} from "../../src/domain/parse.mjs";
+import Editor from "./editor";
+import {Shell,Field,Notice,amount,money} from "../ui";
+export const dynamic="force-dynamic";
+export default async function Page({searchParams}:{searchParams:Promise<{error?:string;ok?:string}>}){
+ const s=await requireSession();if(s.role==="CASHIER")return <Shell title="Transformaciones"/>;
+ const where={tenantId:s.tenantId};
+ const [products,lots,templates,history]=await Promise.all([db.product.findMany({where:{...where,unit:"KG",active:true},orderBy:{name:"asc"}}),db.lot.findMany({where:{...where,quantityMilli:{gt:0n},product:{unit:"KG"},status:"AVAILABLE"},include:{product:true,branch:true}}),db.transformTemplate.findMany({where,orderBy:{name:"asc"}}),db.transformation.findMany({where,include:{sourceLot:{include:{product:true}},outputs:{include:{product:true}},movements:true},orderBy:{createdAt:"desc"},take:50})]);
+ const today=localDay();const available=lots.filter(l=>l.product.active&&l.expiresOn&&["AVAILABLE","EXPIRING"].includes(classifyLot({today,expiresOn:l.expiresOn.toISOString().slice(0,10),reviewOn:l.reviewAt?localDay(l.reviewAt):null,alertDays:l.product.alertDays,status:l.status,quantityMilli:l.quantityMilli})));
+ return <Shell title="Desposte y fraccionamiento"><Notice query={await searchParams}/><section className="panel"><h2>Nueva transformación</h2><p>Registrá todos los cortes, recortes, huesos, grasa y mermas. El peso total debe coincidir con la entrada. Los lotes resultantes requieren revisión antes de venderse.</p>{!available.length?<p>No hay lotes por peso disponibles.</p>:<Editor products={products.map(p=>({id:p.id,name:p.name}))} lots={available.map(l=>({id:l.id,branchId:l.branchId,label:l.branch.name+" · "+l.product.name+" · "+l.code+" · "+amount(l.quantityMilli,"KG"),quantity:l.quantityMilli.toString(),cost:l.remainingCostCents.toString()}))} templates={templates.map(t=>({id:t.id,name:t.name,lines:t.lines as {disposition:string;productId:string;reason:string}[]}))} requestKey={randomUUID()}/>}</section><section className="panel"><h2>Plantillas guardadas</h2>{templates.map(t=><form action={deleteTemplate} key={t.id} className="formgrid"><input type="hidden" name="id" value={t.id}/><span>{t.name}</span><button className="secondary">Eliminar plantilla</button></form>)}</section><section className="panel"><h2>Últimas transformaciones</h2>{history.map(h=><details key={h.id}><summary>{h.sourceLot.product.name} · {amount(h.inputMilli,"KG")} · {money(h.inputCostCents)} · {h.createdAt.toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}</summary><p>Lote origen: {h.sourceLot.code}</p>{h.outputs.map(o=><p key={o.id}>{o.product.name} · {amount(o.quantityMilli,"KG")} restante · lote {o.code}</p>)}{h.movements.filter(m=>m.kind==="GIFT"||m.kind==="WASTE").map(m=><p key={m.id}>{m.kind==="GIFT"?"Regalo":"Merma"}: {m.reason} · {amount(-m.deltaMilli,"KG")} · {money(-m.deltaCostCents)}</p>)}</details>)}{!history.length&&<p>No hay transformaciones registradas.</p>}</section></Shell>;
+}
