@@ -1,5 +1,5 @@
 # OnlyMarket
 
-Sistema de gestión comercial y alimentos perecederos de NanoLabs.
+Sistema SaaS multi-tenant de gestión comercial, inventario por lotes, desposte/fraccionamiento, POS, promociones, finanzas e informes de NanoLabs.
 
-Estado: desarrollo inicial. No apto para producción hasta completar las pruebas y los controles de seguridad.
+Versión actual: `1.0.0-rc.1`. Consultar [docs/DEPLOY.md](docs/DEPLOY.md) para instalación aislada, backups, restauración y alcance operativo vigente.
