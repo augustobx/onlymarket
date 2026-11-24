@@ -1,7 +1,7 @@
+import {localDay} from "../domain/parse.mjs";
 import {createHash} from "node:crypto";
 import {consumeCost,planTransformation,classifyLot} from "../domain/inventory.mjs";
 
-const localDay = date => new Intl.DateTimeFormat("en-CA",{timeZone:"America/Argentina/Buenos_Aires",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
 const dateOnly = date => date?.toISOString().slice(0,10) ?? null;
 const validId = value => typeof value === "string" && value.length > 0 && value.length <= 128;
 const MAX = 9223372036854775807n;
@@ -56,7 +56,7 @@ export async function transformLot(prisma, session, input) {
           if(line.disposition!=="STOCK")continue;
           const lot=await tx.lot.create({data:{tenantId,branchId:source.branchId,productId:line.productId,supplierId:source.supplierId,
             code:batch.id+"-"+index,quantityMilli:line.quantityMilli,remainingCostCents:line.costCents,
-            expiresOn:source.expiresOn,reviewAt:source.reviewAt,status:"REVIEW",producedById:batch.id}});
+            expiresOn:source.expiresOn,reviewAt:source.reviewAt,openedAt:source.openedAt,status:"REVIEW",producedById:batch.id}});
           // Output is held for manual review; no silent extension of shelf life.
           await tx.stockMovement.create({data:{tenantId,lotId:lot.id,transformationId:batch.id,actorId,kind:"TRANSFORM_IN",
             deltaMilli:line.quantityMilli,deltaCostCents:line.costCents,reason:line.reason}});

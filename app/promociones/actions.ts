@@ -1,6 +1,7 @@
 "use server";
 import {redirect} from "next/navigation";
 import {revalidatePath} from "next/cache";
+import type {Prisma} from "@prisma/client";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {decimal,dateInput,textField} from "../../src/domain/parse.mjs";
@@ -8,7 +9,7 @@ import {authorizeSale,serial} from "../../src/server/sales.mjs";
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
 async function run(f:FormData,disable=false){
  const s=await requireSession();let error="";
- try{await serial(db,async tx=>{
+ try{await serial(db,async (tx:Prisma.TransactionClient)=>{
   await authorizeSale(tx,s,["OWNER","MANAGER"]);
   if(disable){const id=textField(str(f,"id"),"Promoción");await tx.promotion.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{active:false}});return;}
   const productId=textField(str(f,"productId"),"Producto"),lotId=textField(str(f,"lotId"),"Lote",128,true)||null;

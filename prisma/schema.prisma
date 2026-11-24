@@ -139,6 +139,7 @@ model Lot {
   supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id])
   movements          StockMovement[]
   receipt            Receipt?
+  adjustments        LotOperation[]
   saleLines          SaleLine[]
   promotions         Promotion[]
   inputs             Transformation[] @relation("SourceLot")
@@ -307,4 +308,22 @@ model Promotion {
   lot Lot? @relation(fields: [tenantId, lotId], references: [tenantId, id])
   @@id([tenantId, id])
   @@index([tenantId, productId, active])
+}
+
+model LotOperation {
+  id String @default(uuid())
+  tenantId String
+  lotId String
+  actorId String
+  requestKey String
+  requestHash String
+  kind String
+  quantityMilli BigInt @default(0)
+  costCents BigInt @default(0)
+  reason String
+  createdAt DateTime @default(now())
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@index([tenantId, lotId, createdAt])
 }
