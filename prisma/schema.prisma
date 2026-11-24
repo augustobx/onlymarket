@@ -56,6 +56,7 @@ model Tenant {
   products  Product[]
   suppliers Supplier[]
   expenses Expense[]
+  templates TransformTemplate[]
 }
 
 model User {
@@ -415,4 +416,15 @@ model SaleCancellation {
   @@id([tenantId,id])
   @@unique([tenantId,saleId])
   @@unique([tenantId,requestKey])
+}
+
+model TransformTemplate {
+ id String @default(uuid())
+ tenantId String
+ name String
+ lines Json
+ createdAt DateTime @default(now())
+ tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,name])
 }

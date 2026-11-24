@@ -5,6 +5,7 @@ import {db} from "../src/server/db";
 import {login,logout,requireSession} from "../src/server/auth";
 import {decimal,textField,localDay} from "../src/domain/parse.mjs";
 import {receiveLot} from "../src/server/receipts.mjs";
+import {templateLines} from "../src/domain/templates.mjs";
 import {transformLot} from "../src/server/transform.mjs";
 import type {Prisma} from "@prisma/client";
 
@@ -62,7 +63,7 @@ export async function transformAction(f:FormData){
  const s=await manager();
  await write("/transformaciones",async()=>{
   const outputs=[];
-  for(let i=0;i<8;i++){
+  for(let i=0;i<100;i++){
    const q=str(f,"quantity"+i);if(!q.trim())continue;
    outputs.push({quantityMilli:decimal(q,3,"Peso").toString(),productId:str(f,"product"+i),disposition:str(f,"disposition"+i),reason:str(f,"reason"+i)});
   }
@@ -128,5 +129,29 @@ export async function bulkPrice(f:FormData){
  }
  },{isolationLevel:"Serializable",timeout:20000});
  revalidatePath("/pos");
+ });
+}
+
+export async function saveTemplate(f:FormData){
+ const s=await manager();
+ await write("/transformaciones",async()=>{
+  const name=textField(str(f,"templateName"),"Nombre de plantilla",100),raw=str(f,"templateLines");
+  if(raw.length>60000)throw new Error("Plantilla demasiado extensa");
+  const lines=templateLines(JSON.parse(raw));
+  await db.$transaction(async tx=>{
+   await authorize(tx,s);
+   const ids=[...new Set(lines.filter((l:{disposition:string})=>l.disposition==="STOCK").map((l:{productId:string})=>l.productId))] as string[];
+   if(await tx.product.count({where:{tenantId:s.tenantId,id:{in:ids},active:true,unit:"KG"}})!==ids.length)throw new Error("Producto inválido en plantilla");
+   await tx.transformTemplate.create({data:{tenantId:s.tenantId,name,lines}});
+  },{isolationLevel:"Serializable"});
+ });
+}
+export async function deleteTemplate(f:FormData){
+ const s=await manager();
+ await write("/transformaciones",async()=>{
+  await db.$transaction(async tx=>{
+   await authorize(tx,s);
+   await tx.transformTemplate.delete({where:{tenantId_id:{tenantId:s.tenantId,id:textField(str(f,"id"),"Plantilla")}}});
+  },{isolationLevel:"Serializable"});
  });
 }
