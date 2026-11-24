@@ -2,7 +2,7 @@
 import {db} from "../../src/server/db";
 import {requirePlatform} from "../../src/server/platform-auth";
 import {plans} from "../../src/domain/settings.mjs";
-import {dateInput} from "../../src/domain/parse.mjs";
+import {dateInput,localDay} from "../../src/domain/parse.mjs";
 import {redirect} from "next/navigation";
 export async function licenseAction(f:FormData){
  const s=await requirePlatform();let error="";
@@ -12,7 +12,7 @@ export async function licenseAction(f:FormData){
  await db.$transaction(async tx=>{
  const auth=await tx.platformSession.findUnique({where:{tokenHash:s.tokenHash},include:{admin:true}});
  if(!auth?.admin.active||auth.expiresAt<=new Date())throw new Error("Sesión inválida");
- if((suspended||licenseUntil&&licenseUntil.toISOString().slice(0,10)<new Date().toLocaleDateString("en-CA",{timeZone:"America/Argentina/Buenos_Aires"}))&&await tx.cashShift.count({where:{tenantId:id,closedAt:null}}))throw new Error("Cerrar las cajas antes de suspender");
+ if((suspended||licenseUntil&&licenseUntil.toISOString().slice(0,10)<localDay())&&await tx.cashShift.count({where:{tenantId:id,closedAt:null}}))throw new Error("Cerrar las cajas antes de suspender");
  await tx.tenant.update({where:{id},data:{plan,licenseUntil,suspended}});
  await tx.platformAudit.create({data:{adminId:s.id,tenantId:id,action:"LICENSE",detail:JSON.stringify({plan,licenseUntil,suspended})}});
  },{isolationLevel:"Serializable"});

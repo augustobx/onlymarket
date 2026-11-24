@@ -19,3 +19,12 @@ Backups: sh scripts/backup.sh /opt/backups/onlymarket. La lista del archivo se v
 PWA: manifest y worker sin caché de datos privados. Requiere HTTPS; funcionamiento offline de ventas no incluido. Validar instalación en cada navegador/dispositivo.
 
 Pendientes de producción: prueba de navegador, migración y restore probados, revisión de roles y políticas de caducidad, comprobantes y devoluciones, prueba de capacidad POS. No incluye ARCA, integración directa de balanza, pagos bancarios ni Hub.
+
+## Candidata 1.0.0-rc.1: revisión real
+Instalar únicamente cuando el PR del SHA exacto tenga CI verde, incluidos tests PostgreSQL, navegador, Docker, backup y restore. No es una autorización de apertura al público. Crear un comercio piloto separado de los datos de revisión; no cargar fixtures de CI en el servidor.
+
+Perfiles de comercio adaptan navegación, no son permisos. Planes PILOT/BASIC/PRO/ENTERPRISE son asignación administrativa; sin cobro automático ni límites de módulos por plan. La suspensión y la expiración impiden acceso; cerrar cajas antes de suspender o antes del vencimiento. Si una licencia vence con una caja abierta, NanoLabs debe extenderla para completar el cierre. Fecha inclusiva Argentina, sin fecha = acceso indefinido. La administración central se habilita por env y cuenta separada.
+
+Fidelización: clientes por código, descuento de socio configurable, puntos informativos según importe neto de cada venta y tasa histórica. No hay canje de puntos. Combos: hasta 8 productos por unidad, grupos exactos de cantidades, una regla de combo por venta, elección por mejor ahorro respecto de ofertas y descuento de socio; no acumulación en artículos participantes. El costo de inventario no se altera por descuentos. Peso variable: formato EAN-13 prefijo 2 + PLU 5 + gramos 5 + checksum 1; activación explícita por comercio, PLU único en productos KG. Selección física de lote y confirmación de peso. No soporta etiquetas que codifican precio ni conexión directa serial/USB a balanza. Verificar formato y lectura real antes de activar.
+
+Revisión presencial: recibir lotes de verduras, carne y fiambre; despostar; abrir pieza; configurar vencimientos; verificar aviso y bloqueo; imprimir etiquetas; escanear etiquetas reales; venta mixta; devolución; cierre; reporte y respaldo. No usar como factura fiscal: ARCA pendiente. 
