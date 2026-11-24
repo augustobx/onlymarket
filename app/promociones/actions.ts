@@ -4,6 +4,7 @@ import {revalidatePath} from "next/cache";
 import type {Prisma} from "@prisma/client";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
+import {actionError} from "../../src/server/errors.mjs";
 import {decimal,dateInput,textField} from "../../src/domain/parse.mjs";
 import {authorizeSale,serial} from "../../src/server/sales.mjs";
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
@@ -29,8 +30,9 @@ async function run(f:FormData,disable=false){
   if(product.unit==="UNIT"&&minimumMilli!==null&&minimumMilli%1000n)throw new Error("Cantidad mínima debe ser entera");
   if(lotId){const lot=await tx.lot.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id:lotId}}});if(!lot||lot.productId!==productId)throw new Error("El lote no corresponde al producto");}
   await tx.promotion.create({data:{tenantId:s.tenantId,productId,lotId,name,discountBps:Number(discount),minimumMilli,buyUnits,payUnits,startsOn,endsOn,expiryWithinDays:days?Number(days):null}});
- });}catch(e){error=e instanceof Error&&!('code' in e)&&e.message.length<180&&!e.message.includes("\n")?e.message:"No se pudo guardar";}
- revalidatePath("/pos");revalidatePath("/promociones");redirect("/promociones"+(error?"?error="+encodeURIComponent(error):"?ok=1"));
+ });}catch(e){error=actionError(e,"No se pudo guardar");}
+ revalidatePath("/pos");revalidatePath("/promociones");
+ redirect("/promociones"+(error?"?error="+encodeURIComponent(error):"?ok="+(disable?"promo_disabled":"promo_created")));
 }
 export async function createPromotion(f:FormData){await run(f);}
 export async function disablePromotion(f:FormData){await run(f,true);}
