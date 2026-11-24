@@ -85,6 +85,7 @@ model Branch {
   lots     Lot[]
   batches  Transformation[]
   receipts Receipt[]
+  purchases Purchase[]
   cashShifts CashShift[]
   @@id([tenantId, id])
 }
@@ -119,6 +120,7 @@ model Supplier {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots     Lot[]
   receipts Receipt[]
+  purchases Purchase[]
   payments SupplierPayment[]
   @@id([tenantId, id])
 }
@@ -218,6 +220,8 @@ model Receipt {
   requestKey String
   requestHash String
   invoiceRef String?
+  purchaseId String?
+  purchase Purchase? @relation(fields: [tenantId,purchaseId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
   quantityMilli BigInt
   totalCostCents BigInt
   createdAt DateTime @default(now())
@@ -427,4 +431,24 @@ model TransformTemplate {
  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
  @@id([tenantId,id])
  @@unique([tenantId,name])
+}
+
+model Purchase {
+ id String @default(uuid())
+ tenantId String
+ branchId String
+ supplierId String
+ actorId String
+ requestKey String
+ requestHash String
+ invoiceRef String
+ totalCostCents BigInt
+ createdAt DateTime @default(now())
+ branch Branch @relation(fields: [tenantId,branchId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+ supplier Supplier @relation(fields: [tenantId,supplierId], references: [tenantId,id], onDelete: Restrict, onUpdate: Cascade)
+ receipts Receipt[]
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@unique([tenantId,supplierId,invoiceRef])
+ @@index([tenantId,createdAt])
 }
