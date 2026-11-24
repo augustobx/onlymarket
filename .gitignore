@@ -5,3 +5,4 @@ node_modules/
 .next/
 coverage/
 *.log
+next-env.d.ts
