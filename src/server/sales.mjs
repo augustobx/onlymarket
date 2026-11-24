@@ -1,3 +1,5 @@
+import {basketQuote} from "../domain/combos.mjs";
+import {licenseActive} from "../domain/settings.mjs";
 import {createHash} from "node:crypto";
 import {decimal,textField,localDay} from "../domain/parse.mjs";
 import {consumeCost,classifyLot} from "../domain/inventory.mjs";
@@ -5,8 +7,8 @@ import {eligiblePromotions,quotePromotion,paymentBreakdown,checked} from "../dom
 const dayOnly=d=>d?.toISOString().slice(0,10)??null;
 const roles=["OWNER","MANAGER","CASHIER"];
 export async function authorizeSale(tx,s,allowed=roles){
- const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true}});
- if(!m?.user.active||!allowed.includes(m.role))throw new Error("Sin permisos");
+ const m=await tx.membership.findUnique({where:{tenantId_userId:{tenantId:s.tenantId,userId:s.actorUserId}},include:{user:true,tenant:true}});
+ if(!m?.user.active||!licenseActive(m.tenant,localDay())||!allowed.includes(m.role))throw new Error("Sin permisos");
  return m.role;
 }
 export async function serial(prisma,fn){
@@ -45,7 +47,9 @@ export async function recordSale(prisma,s,input){
  const parts=payment==="MIXED"?Object.fromEntries(["cashCents","debitCents","creditCents","transferCents"].map(k=>[k,decimal(input.parts?.[k]||"0",2,"Importe del medio",{allowZero:true})])):{};
  const tendered=payment==="CASH"||(parts.cashCents??0n)>0n?decimal(input.tendered,2,"Efectivo recibido",{allowZero:true}):null;
  const paid=paymentBreakdown(quoted,payment,tendered,parts);
+ const customerId=input.customerId?textField(input.customerId,"Cliente"):null;
  const payload=[s.actorUserId,shiftId,payment,tendered,quoted,lines];
+ if(customerId)payload.push(customerId);
  if(payment==="MIXED")payload.push(parts);
  const requestHash=createHash("sha256").update(JSON.stringify(payload,(_,v)=>typeof v==="bigint"?v.toString():v)).digest("hex");
  return serial(prisma,async tx=>{
@@ -71,10 +75,15 @@ export async function recordSale(prisma,s,input){
    const price=quotePromotion(lot.product.salePriceCents,quantityMilli,lot.product.unit,eligible);
    items.push({lot,quantityMilli,costCents,price});
   }
+  const tenant=await tx.tenant.findUniqueOrThrow({where:{id:tenantId}});
+  if(customerId&&!await tx.customer.findFirst({where:{tenantId,id:customerId,active:true}}))throw new Error("Cliente inválido");
+  const combos=await tx.combo.findMany({where:{tenantId,active:true,startsOn:{lte:new Date(today+"T00:00:00Z")},endsOn:{gte:new Date(today+"T00:00:00Z")}}});
+  const quotes=basketQuote(items.map(i=>({productId:i.lot.productId,unit:i.lot.product.unit,unitPrice:i.lot.product.salePriceCents,quantity:i.quantityMilli,price:i.price})),combos,customerId?tenant.memberDiscountBps:0);
+  items.forEach((item,i)=>{item.price=quotes[i];});
   const sum=fn=>checked(items.reduce((a,l)=>a+fn(l),0n));
   const totalCents=sum(l=>l.price.total);
   if(totalCents!==quoted)throw new Error("El precio cambió. Revisá y confirmá nuevamente.");
-  const sale=await tx.sale.create({data:{tenantId,shiftId,actorId:s.actorUserId,requestKey,requestHash,payment,totalCents,subtotalCents:sum(l=>l.price.subtotal),costCents:sum(l=>l.costCents),...paid}});
+  const sale=await tx.sale.create({data:{tenantId,shiftId,actorId:s.actorUserId,requestKey,requestHash,payment,customerId,pointsRateCents:customerId?tenant.pointsEveryCents:null,totalCents,subtotalCents:sum(l=>l.price.subtotal),costCents:sum(l=>l.costCents),...paid}});
   for(const {lot,quantityMilli,costCents,price} of items){
    const remaining=lot.quantityMilli-quantityMilli;
    await tx.lot.update({where:{tenantId_id:{tenantId,id:lot.id}},data:{quantityMilli:remaining,remainingCostCents:lot.remainingCostCents-costCents,status:remaining===0n?"EXHAUSTED":lot.status}});

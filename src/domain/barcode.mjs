@@ -12,3 +12,9 @@ export function ean13(code){
  for(let i=7;i<13;i++)bits+=L[digits[i]].replace(/[01]/g,b=>b==="0"?"1":"0");
  return bits+"101";
 }
+
+export function decodeWeight(code,prefix){
+ if(!prefix||!/^2\d$/.test(prefix)||typeof code!=="string"||!code.startsWith(prefix)||!ean13(code))return null;
+ const grams=Number(code.slice(7,12));if(grams<=0)return null;
+ return {plu:code.slice(2,7),quantityMilli:grams};
+}

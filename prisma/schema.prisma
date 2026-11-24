@@ -63,6 +63,7 @@ model Tenant {
   suspended Boolean @default(false)
   weightPrefix String?
   pointsEveryCents BigInt @default(100000)
+  memberDiscountBps Int @default(0)
   customers Customer[]
   combos Combo[]
 }
@@ -305,6 +306,7 @@ model Sale {
   shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id], onDelete: Restrict, onUpdate: Cascade)
   lines SaleLine[]
   customerId String?
+  pointsRateCents BigInt?
   customer Customer? @relation(fields:[tenantId,customerId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
   cancellation SaleCancellation?
   returns SaleReturn[]

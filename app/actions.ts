@@ -40,12 +40,13 @@ export async function addProduct(f:FormData){
  await write("/catalogo",async()=>{
   const sku=textField(str(f,"sku"),"SKU",64),name=textField(str(f,"name"),"Nombre");
   const barcode=textField(str(f,"barcode"),"Código de barras",64,true)||null;
-  const unit=str(f,"unit"),sector=str(f,"sector");
+  const unit=str(f,"unit"),sector=str(f,"sector"),weightCode=str(f,"weightCode")||null;
+  if(weightCode&&(unit!=="KG"||!/^\d{5}$/.test(weightCode)))throw new Error("PLU de peso: 5 dígitos y producto por kg");
   if(unit!=="KG"&&unit!=="UNIT")throw new Error("Unidad inválida");
   if(sector!=="BUTCHERY"&&sector!=="DELI"&&sector!=="PRODUCE"&&sector!=="GROCERY"&&sector!=="OTHER")throw new Error("Sector inválido");
   const salePriceCents=decimal(str(f,"price"),2,"Precio",{allowZero:true});
   const alertDays=days(str(f,"alertDays"))!,freshnessDays=days(str(f,"freshnessDays"),true),openedLifeDays=days(str(f,"openedLifeDays"),true);
-  await db.$transaction(async tx=>{await authorize(tx,s);await tx.product.create({data:{tenantId:s.tenantId,sku,name,barcode,unit,sector,salePriceCents,alertDays,freshnessDays,openedLifeDays}});},{isolationLevel:"Serializable"});
+  await db.$transaction(async tx=>{await authorize(tx,s);await tx.product.create({data:{tenantId:s.tenantId,sku,name,barcode,weightCode,unit,sector,salePriceCents,alertDays,freshnessDays,openedLifeDays}});},{isolationLevel:"Serializable"});
  });
 }
 export async function addSupplier(f:FormData){
@@ -101,10 +102,11 @@ export async function editProduct(f:FormData){
  await db.$transaction(async tx=>{
    await authorize(tx,s);
    const p=await tx.product.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}}});if(!p)throw new Error("Producto inexistente");
-   const old={name:p.name,sku:p.sku,barcode:p.barcode,price:p.salePriceCents.toString(),alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,active:p.active};
+   const weightCode=str(f,"weightCode")||null;if(weightCode&&(p.unit!=="KG"||!/^\d{5}$/.test(weightCode)))throw new Error("PLU de peso: 5 dígitos y producto por kg");
+   const old={name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,price:p.salePriceCents.toString(),alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,active:p.active};
    const active=str(f,"active")==="yes";
-   await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,sku,barcode,salePriceCents:price,alertDays,freshnessDays,openedLifeDays,active}});
-   await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:id,actorId:s.actorUserId,previous:JSON.stringify(old),next:JSON.stringify({name,sku,barcode,price:price.toString(),alertDays,freshnessDays,openedLifeDays,active})}});
+   await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,sku,barcode,weightCode,salePriceCents:price,alertDays,freshnessDays,openedLifeDays,active}});
+   await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:id,actorId:s.actorUserId,previous:JSON.stringify(old),next:JSON.stringify({name,sku,barcode,weightCode,price:price.toString(),alertDays,freshnessDays,openedLifeDays,active})}});
  },{isolationLevel:"Serializable"});
  revalidatePath("/pos");revalidatePath("/inventario");
  });
