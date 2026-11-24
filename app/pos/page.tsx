@@ -1,0 +1,24 @@
+import {randomUUID} from "node:crypto";
+import {db} from "../../src/server/db";
+import {requireSession} from "../../src/server/auth";
+import {classifyLot} from "../../src/domain/inventory.mjs";
+import {localDay} from "../../src/domain/parse.mjs";
+import {bestPromotion} from "../../src/domain/sales.mjs";
+import {Shell,Notice,Field,money} from "../ui";
+import {openAction,closeAction} from "./actions";
+import Cart from "./cart";
+export const dynamic="force-dynamic";
+const dateOnly=(d:Date|null)=>d?.toISOString().slice(0,10)??null;
+const labels={CASH:"Efectivo",DEBIT:"Débito",CREDIT:"Crédito",TRANSFER:"Transferencia"};
+export default async function Page({searchParams}:{searchParams:Promise<{error?:string;ok?:string}>}){
+ const s=await requireSession();const query=await searchParams;
+ if(!["OWNER","MANAGER","CASHIER"].includes(s.role))return <Shell title="Punto de venta"><p>Sin permisos para operar caja.</p></Shell>;
+ const where={tenantId:s.tenantId,actorId:s.actorUserId};
+ const [shift,branches,closed]=await Promise.all([db.cashShift.findFirst({where:{...where,closedAt:null},include:{branch:true}}),db.branch.findMany({where:{tenantId:s.tenantId}}),db.cashShift.findMany({where:{...where,closedAt:{not:null}},include:{branch:true},orderBy:{closedAt:"desc"},take:10})]);
+ const today=localDay();
+ const [lots,promos,sales,totals]=shift?await Promise.all([db.lot.findMany({where:{tenantId:s.tenantId,branchId:shift.branchId,quantityMilli:{gt:0n},product:{active:true}},include:{product:true},orderBy:[{expiresOn:"asc"},{receivedAt:"asc"}]}),db.promotion.findMany({where:{tenantId:s.tenantId,active:true}}),db.sale.findMany({where:{tenantId:s.tenantId,shiftId:shift.id},orderBy:{createdAt:"desc"},take:30}),db.sale.groupBy({by:["payment"],where:{tenantId:s.tenantId,shiftId:shift.id},_sum:{totalCents:true},_count:true})]):[[],[],[],[]];
+ const promoDates=promos.map(p=>({...p,startsOn:dateOnly(p.startsOn),endsOn:dateOnly(p.endsOn)}));
+ const available=lots.flatMap(l=>{const info={...l,expiresOn:dateOnly(l.expiresOn),reviewOn:l.reviewAt?localDay(l.reviewAt):null,alertDays:l.product.alertDays};if(!["AVAILABLE","EXPIRING"].includes(classifyLot({...info,today})))return [];const promo=bestPromotion(promoDates,info,today);return [{id:l.id,name:l.product.name,sku:l.product.sku,barcode:l.product.barcode,code:l.code,unit:l.product.unit,quantity:l.quantityMilli.toString(),price:l.product.salePriceCents.toString(),discount:promo?.discountBps??0,expiry:info.expiresOn}];});
+ const expected=(shift?.openingCents??0n)+(totals.find(t=>t.payment==="CASH")?._sum.totalCents??0n);
+ return <Shell title="Punto de venta" allowCashier><Notice query={query}/>{!shift?<section className="panel"><h2>Abrir caja</h2><form action={openAction} className="formgrid"><Field label="Sucursal"><select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></Field><Field label="Fondo inicial ($)"><input name="opening" required defaultValue="0" inputMode="decimal"/></Field><button>Abrir caja</button></form></section>:<><section className="metrics"><article><small>Caja abierta · {shift.branch.name}</small><strong>{money(shift.openingCents)}</strong><small>Fondo inicial</small></article>{totals.map(t=><article key={t.payment}><small>{labels[t.payment]} · {t._count} ventas</small><strong>{money(t._sum.totalCents??0n)}</strong></article>)}</section><Cart key={shift.id+":"+String(sales[0]?.id??"")} lots={available} shiftId={shift.id} requestKey={randomUUID()}/><section className="panel"><h2>Últimas ventas</h2><div className="tablewrap"><table><thead><tr><th>Fecha y hora</th><th>Operación</th><th>Pago</th><th>Importe</th><th>Vuelto</th></tr></thead><tbody>{sales.map(v=><tr key={v.id}><td>{v.createdAt.toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}</td><td>{v.id.slice(0,8)}</td><td>{labels[v.payment]}</td><td>{money(v.totalCents)}</td><td>{v.changeCents===null?"—":money(v.changeCents)}</td></tr>)}</tbody></table></div></section><section className="panel"><h2>Cierre de caja</h2><p>Efectivo esperado: {money(expected)}. Solo fondo inicial y ventas en efectivo; retiros y devoluciones aún no habilitados.</p><form action={closeAction} className="formgrid"><input type="hidden" name="shiftId" value={shift.id}/><Field label="Efectivo contado ($)"><input name="counted" inputMode="decimal" required/></Field><button>Cerrar caja</button></form></section></>}<section className="panel"><h2>Últimos cierres</h2>{closed.map(c=><p key={c.id}>{c.branch.name} · {c.closedAt?.toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})} · Esperado {money(c.expectedCents??0n)} · Contado {money(c.countedCents??0n)} · Diferencia {money((c.countedCents??0n)-(c.expectedCents??0n))}</p>)}{!closed.length&&<p>Sin cierres registrados.</p>}</section></Shell>;
+}

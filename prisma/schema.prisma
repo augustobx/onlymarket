@@ -83,6 +83,7 @@ model Branch {
   lots     Lot[]
   batches  Transformation[]
   receipts Receipt[]
+  cashShifts CashShift[]
   @@id([tenantId, id])
 }
 
@@ -101,6 +102,8 @@ model Product {
   active        Boolean @default(true)
   tenant        Tenant @relation(fields: [tenantId], references: [id])
   lots          Lot[]
+  promotions    Promotion[]
+  saleLines     SaleLine[]
   @@id([tenantId, id])
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
@@ -136,6 +139,8 @@ model Lot {
   supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id])
   movements          StockMovement[]
   receipt            Receipt?
+  saleLines          SaleLine[]
+  promotions         Promotion[]
   inputs             Transformation[] @relation("SourceLot")
   producedById       String?
   producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id])
@@ -168,6 +173,8 @@ model StockMovement {
   tenantId         String
   lotId            String
   transformationId String?
+  saleId           String?
+  sale             Sale? @relation(fields: [tenantId, saleId], references: [tenantId, id])
   actorId          String
   kind             MovementKind
   deltaMilli       BigInt
@@ -216,4 +223,88 @@ model Receipt {
   @@unique([tenantId, requestKey])
   @@unique([tenantId, lotId])
   @@index([tenantId, supplierId, createdAt])
+}
+
+enum PaymentMethod {
+  CASH
+  DEBIT
+  CREDIT
+  TRANSFER
+}
+
+model CashShift {
+  id String @default(uuid())
+  tenantId String
+  branchId String
+  actorId String
+  activeKey String?
+  openingCents BigInt
+  openedAt DateTime @default(now())
+  closedAt DateTime?
+  countedCents BigInt?
+  expectedCents BigInt?
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  sales Sale[]
+  @@id([tenantId, id])
+  @@unique([tenantId, activeKey])
+  @@index([tenantId, branchId, openedAt])
+}
+
+model Sale {
+  id String @default(uuid())
+  tenantId String
+  shiftId String
+  actorId String
+  requestKey String
+  requestHash String
+  payment PaymentMethod
+  subtotalCents BigInt
+  totalCents BigInt
+  costCents BigInt
+  tenderedCents BigInt?
+  changeCents BigInt?
+  createdAt DateTime @default(now())
+  shift CashShift @relation(fields: [tenantId, shiftId], references: [tenantId, id])
+  lines SaleLine[]
+  movements StockMovement[]
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@index([tenantId, createdAt])
+}
+
+model SaleLine {
+  id String @id @default(uuid())
+  tenantId String
+  saleId String
+  lotId String
+  productId String
+  productName String
+  quantityMilli BigInt
+  unitPriceCents BigInt
+  subtotalCents BigInt
+  totalCents BigInt
+  costCents BigInt
+  discountBps Int
+  promotionId String?
+  sale Sale @relation(fields: [tenantId, saleId], references: [tenantId, id])
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  @@index([tenantId, saleId])
+}
+
+model Promotion {
+  id String @default(uuid())
+  tenantId String
+  productId String
+  lotId String?
+  name String
+  discountBps Int
+  expiryWithinDays Int?
+  startsOn DateTime @db.Date
+  endsOn DateTime @db.Date
+  active Boolean @default(true)
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  lot Lot? @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  @@id([tenantId, id])
+  @@index([tenantId, productId, active])
 }
