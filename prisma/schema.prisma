@@ -52,6 +52,7 @@ model Tenant {
   createdAt DateTime @default(now())
   branches  Branch[]
   members   Membership[]
+  sessions  Session[]
   products  Product[]
   suppliers Supplier[]
 }
@@ -62,6 +63,7 @@ model User {
   passwordHash String
   active       Boolean @default(true)
   memberships  Membership[]
+  sessions     Session[]
 }
 
 model Membership {
@@ -80,6 +82,7 @@ model Branch {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
   lots     Lot[]
   batches  Transformation[]
+  receipts Receipt[]
   @@id([tenantId, id])
 }
 
@@ -110,6 +113,7 @@ model Supplier {
   phone    String?
   tenant   Tenant @relation(fields: [tenantId], references: [id])
   lots     Lot[]
+  receipts Receipt[]
   @@id([tenantId, id])
 }
 
@@ -131,6 +135,7 @@ model Lot {
   product            Product @relation(fields: [tenantId, productId], references: [tenantId, id])
   supplier           Supplier? @relation(fields: [tenantId, supplierId], references: [tenantId, id])
   movements          StockMovement[]
+  receipt            Receipt?
   inputs             Transformation[] @relation("SourceLot")
   producedById       String?
   producedBy         Transformation? @relation("ProducedLots", fields: [tenantId, producedById], references: [tenantId, id])
@@ -172,4 +177,43 @@ model StockMovement {
   lot              Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
   transformation   Transformation? @relation(fields: [tenantId, transformationId], references: [tenantId, id])
   @@index([tenantId, lotId, createdAt])
+}
+
+model Session {
+  tokenHash String @id
+  userId String
+  tenantId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model LoginLimit {
+  key String @id
+  attempts Int
+  windowStart DateTime
+}
+
+model Receipt {
+  id String @default(uuid())
+  tenantId String
+  branchId String
+  supplierId String
+  lotId String
+  actorId String
+  requestKey String
+  requestHash String
+  invoiceRef String?
+  quantityMilli BigInt
+  totalCostCents BigInt
+  createdAt DateTime @default(now())
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  supplier Supplier @relation(fields: [tenantId, supplierId], references: [tenantId, id])
+  lot Lot @relation(fields: [tenantId, lotId], references: [tenantId, id])
+  @@id([tenantId, id])
+  @@unique([tenantId, requestKey])
+  @@unique([tenantId, lotId])
+  @@index([tenantId, supplierId, createdAt])
 }
