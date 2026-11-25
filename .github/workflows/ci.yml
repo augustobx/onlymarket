@@ -64,6 +64,21 @@ jobs:
           done
           curl -fsS http://localhost:3000/api/health
           npm run test:browser || { cat /tmp/onlymarket-next.log; exit 1; }
+      - name: Full demo seed acceptance
+        env:
+          DEMO_SLUG: demo-ci
+          DEMO_CONFIRM: CREAR_DEMO
+          PLATFORM_DOMAIN: localhost
+          TENANT_BASE_DOMAIN: localhost
+          TENANT_URL_PORT: '3000'
+        run: |
+          node seed-demo.mjs > /tmp/demo-ci.log
+          grep 'DEMO CREADA Y CONCILIADA' /tmp/demo-ci.log
+          if node seed-demo.mjs > /tmp/demo-ci-repeat.log 2>&1; then
+            echo "Repeated seed unexpectedly succeeded"
+            exit 1
+          fi
+          grep 'ya está registrado' /tmp/demo-ci-repeat.log
       - name: Upload visual review screenshots
         if: always()
         uses: actions/upload-artifact@v4
