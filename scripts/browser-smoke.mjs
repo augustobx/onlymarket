@@ -59,7 +59,8 @@ try {
         await page.waitForFunction(() => getComputedStyle(document.querySelector(".bh2-tarjeta")).opacity === "1");
       }
       await page.screenshot({ path: join(process.env.SMOKE_ARTIFACT_DIR, `${label}-${mode}.png`), fullPage: true });
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${label}: ${mode} overflow`);
+      const overflow = await page.evaluate(() => ({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("body *")].filter(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1&&r.width>0&&!e.closest(".tablewrap,.v2-tabs,.v2-chart-bars");}).slice(0,12).map(e=>({tag:e.tagName,cls:String(e.className).slice(0,120),right:Math.round(e.getBoundingClientRect().right)}))}));
+      assert.ok(overflow.scroll <= width + 1, `${label}: ${mode} overflow ${JSON.stringify(overflow)}`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
   }
