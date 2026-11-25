@@ -96,6 +96,7 @@ try {
   await page.getByLabel("Contraseña", { exact: true }).fill(process.env.BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
   await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+  await visual("dashboard");
 
   // Verify host-only cookie is NOT shared with another tenant subdomain
   const tenantCookies = await page.context().cookies(tenantBase);
@@ -104,6 +105,9 @@ try {
   assert.equal(sessionCookie.domain, `${slug}.localhost`);
 
   await page.goto(tenantBase + "/catalogo");
+  await page.getByRole("button", { name: "+ Nuevo producto", exact: true }).click();
+  await page.getByRole("dialog", { name: "Nuevo producto" }).waitFor();
+  await visual("catalogo-alta");
   const newProduct = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear producto", exact: true }) });
   await newProduct.getByLabel("Nombre", { exact: true }).fill("Yerba smoke");
   await newProduct.getByLabel("SKU", { exact: true }).fill("SMOKE-001");
@@ -114,11 +118,15 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/proveedores");
+  await visual("proveedores");
+  await page.getByRole("button", { name: "+ Nuevo proveedor", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Proveedor smoke");
   await page.getByRole("button", { name: "Crear proveedor" }).click();
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/inventario");
+  await visual("inventario");
+  await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const receive = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
   await receive.getByLabel("Código de lote").fill("SMOKE-LOT");
   await receive.getByLabel("Cantidad (kg o unidades)").fill("3");
@@ -130,6 +138,7 @@ try {
   await page.getByLabel("Fondo inicial ($)").fill("1000");
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
+  await visual("pos");
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
@@ -150,10 +159,12 @@ try {
   await page.getByRole("button", { name: "Imprimir comprobante" }).waitFor();
 
   await page.goto(tenantBase + "/finanzas");
+  await visual("finanzas");
   await page.getByRole("heading", { name: "Finanzas y rentabilidad" }).waitFor();
   assert.match(await page.locator(".metrics").innerText(), /1000,00/);
 
   await page.goto(tenantBase + "/informes");
+  await visual("informes");
   await page.getByRole("heading", { name: "Informes de rentabilidad" }).waitFor();
   const productReport = page.getByRole("row").filter({ hasText: "Yerba smoke" });
   assert.match(await productReport.innerText(), /2500,00/);
@@ -161,6 +172,7 @@ try {
   assert.match(await productReport.innerText(), /1000,00/);
 
   await page.goto(tenantBase + "/alertas");
+  await visual("alertas");
   await page.getByRole("heading", { name: "Centro de alertas" }).waitFor();
   await page.getByRole("button", { name: "Actualizar avisos" }).waitFor();
 
@@ -177,6 +189,8 @@ try {
   assert.equal(await db.product.count({ where: { tenantId: tenant.id, sku: "SMOKE-002" } }), 1);
 
   await page.goto(tenantBase + "/administracion");
+  await visual("administracion");
+  await page.getByRole("button", { name: "+ Nueva sucursal", exact: true }).click();
   const branchForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Agregar sucursal", exact: true }) });
   await branchForm.getByLabel("Nombre").fill("Sucursal smoke");
   await branchForm.getByRole("button", { name: "Agregar sucursal" }).click();
@@ -195,6 +209,8 @@ try {
   assert.equal(counted.remainingCostCents, 150000n);
 
   await page.goto(tenantBase + "/reposicion");
+  await visual("reposicion");
+  await page.getByRole("button", { name: "Configurar objetivo de stock", exact: true }).click();
   const config = page.locator("form").filter({ has: page.getByRole("button", { name: "Guardar objetivo", exact: true }) });
   await config.getByLabel("Sucursal").selectOption(lot.branchId);
   await config.getByLabel("Producto").selectOption(lot.productId);
@@ -222,6 +238,7 @@ try {
   assert.match(await shortageCard.innerText(), /1500,00/);
 
   await page.goto(tenantBase + "/inventario");
+  await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const newReceipt = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
   await newReceipt.getByLabel("Sucursal").selectOption(lot.branchId);
   await newReceipt.locator('select[name="productId"]').selectOption(lot.productId);
@@ -232,6 +249,8 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/promociones");
+  await visual("promociones");
+  await page.getByRole("button", { name: "+ Nueva promoción", exact: true }).click();
   const promoForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear promoción", exact: true }) });
   await promoForm.getByLabel("Nombre", { exact: true }).fill("3x2 smoke");
   await promoForm.locator('select[name="productId"]').selectOption(lot.productId);
@@ -270,6 +289,7 @@ try {
   assert.equal((await httpGet("/superadmin", { host: `${slug}.localhost:3000` })).status, 404);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("4500");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
@@ -283,6 +303,7 @@ try {
 
   await page.goto(tenantBase + "/ventas/devolucion/" + offeredSale.id);
   await page.getByRole("heading", { name: "Devoluciones", exact: true }).waitFor();
+  await page.getByRole("button",{name:"+ Nueva devolución",exact:true}).click();
   await page.getByLabel("Artículo a devolver").selectOption(offeredSale.lines[0].id);
   await page.getByLabel("Cantidad a devolver").fill("1");
   await page.locator('select[name="disposition"]').selectOption("REVIEW");
@@ -298,12 +319,14 @@ try {
   assert.equal(returned.returnedLot.quantityMilli, 1000n);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
   assert.equal((await db.cashShift.findUniqueOrThrow({ where: { tenantId_id: { tenantId: tenant.id, id: closedShift.id } } })).expectedCents, 450000n);
 
   await page.goto(tenantBase + "/configuracion");
+  await visual("configuracion");
   await page.getByLabel("Tipo de comercio").selectOption("KIOSK");
   await page.getByLabel("Prefijo EAN de peso (2 dígitos, opcional)").fill("20");
   await page.getByLabel("Pesos de compra neta por punto").fill("100");
@@ -313,6 +336,8 @@ try {
   assert.equal(await page.getByRole("link", { name: "Desposte y fraccionamiento", exact: true }).count(), 0);
 
   await page.goto(tenantBase + "/clientes");
+  await visual("clientes");
+  await page.getByRole("button", { name: "+ Nuevo cliente", exact: true }).click();
   await page.getByLabel("Código de socio").fill("SOCIO-1");
   await page.getByLabel("Nombre", { exact: true }).fill("Socio smoke");
   await page.getByRole("button", { name: "Crear cliente" }).click();
@@ -333,6 +358,8 @@ try {
   await seedReceipt(weighed.id, "WEIGHT", "2", "1000");
 
   await page.goto(tenantBase + "/combos");
+  await visual("combos");
+  await page.getByRole("button", { name: "+ Nuevo combo", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Combo smoke");
   await page.getByLabel("Precio del combo ($)").fill("2500");
   await page.locator('select[name="product0"]').selectOption(lot.productId);
@@ -370,6 +397,7 @@ try {
   assert.match(await page.getByRole("row").filter({ hasText: "Socio smoke" }).innerText(), /39/);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
@@ -403,6 +431,9 @@ try {
   assert.equal((await reservedCheck.json()).available, false);
 
   // Create second commerce via SuperAdmin
+  await page.getByRole("button", { name: "+ Nuevo comercio", exact: true }).click();
+  await page.getByRole("dialog", { name: "Crear comercio" }).waitFor();
+  await visual("superadmin-alta");
   await page.getByLabel("Nombre del comercio").fill("Segundo comercio smoke");
   await page.getByLabel("Subdominio de acceso").fill("platform-smoke");
   await page.getByLabel("Correo del propietario").fill("platform-owner@example.invalid");
@@ -479,6 +510,7 @@ try {
   // Suspend Tenant 2 and verify access is blocked with branded screen (and no login form)
   await page.goto(platformBase + "/superadmin");
   const licenseRow = page.getByRole("row").filter({ hasText: "Segundo comercio smoke" });
+  await licenseRow.getByRole("button", { name: "Editar licencia" }).click();
   await licenseRow.getByLabel("Plan", { exact: true }).selectOption("PRO");
   await licenseRow.getByLabel("Suspender acceso").check();
   await licenseRow.getByRole("button", { name: "Guardar licencia" }).click();
@@ -498,6 +530,7 @@ try {
   await page.waitForURL("**/login");
   await page.goto(platformBase + "/superadmin");
   const reactivateRow = page.getByRole("row").filter({ hasText: "Segundo comercio smoke" });
+  await reactivateRow.getByRole("button", { name: "Editar licencia" }).click();
   await reactivateRow.getByLabel("Suspender acceso").uncheck();
   await reactivateRow.getByRole("button", { name: "Guardar licencia" }).click();
   await page.getByRole("status").filter({ hasText: "Licencia actualizada" }).waitFor();
