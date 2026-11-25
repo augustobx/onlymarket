@@ -50,6 +50,7 @@ jobs:
           TENANT_BASE_DOMAIN: localhost
           TENANT_URL_PORT: '3000'
           SMOKE_FAILURE_DIR: /tmp/onlymarket-smoke-failure
+          SMOKE_ARTIFACT_DIR: /tmp/onlymarket-visual
           PLATFORM_BOOTSTRAP_EMAIL: platform-smoke@example.invalid
           PLATFORM_BOOTSTRAP_PASSWORD: CI-only-platform-test-password
           HUB_INTEGRATION_TOKEN: CI-only-hub-test-token-not-production-12345
@@ -63,6 +64,14 @@ jobs:
           done
           curl -fsS http://localhost:3000/api/health
           npm run test:browser || { cat /tmp/onlymarket-next.log; exit 1; }
+      - name: Upload visual review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlymarket-visual-review
+          path: /tmp/onlymarket-visual/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload browser failure screenshot
         if: failure()
         uses: actions/upload-artifact@v4
