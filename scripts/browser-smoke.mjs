@@ -139,6 +139,8 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   await visual("pos");
+  await page.locator(".v2-pos-options summary").click();
+  await page.getByLabel("Escaneo rápido").uncheck();
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
@@ -261,6 +263,7 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/pos");
+  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   const scanner = page.getByLabel("Buscar / escanear código");
   for (let i = 0; i < 3; i++) {
@@ -272,7 +275,7 @@ try {
   await page.getByRole("button", { name: "Restar una unidad de Yerba smoke" }).click();
   assert.match(await page.locator(".total").innerText(), /5000,00/);
   await page.getByRole("button", { name: "Sumar una unidad de Yerba smoke" }).click();
-  await page.locator('select[name="payment"]').selectOption("MIXED");
+  await page.getByRole("button",{name:"Pago mixto",exact:true}).click();
   await page.getByLabel("Efectivo asignado").fill("1000");
   await page.getByLabel("Transferencia asignada").fill("4000");
   await page.getByLabel("Efectivo recibido").fill("1200");
@@ -373,6 +376,7 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   const comboScan = page.getByLabel("Buscar / escanear código");
+  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   for (const code of ["COMBO-A", "COMBO-B"]) {
     await comboScan.fill(code);
@@ -385,7 +389,7 @@ try {
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
   await page.getByLabel("Cliente (opcional)").selectOption(member.id);
   assert.match(await page.locator(".total").innerText(), /3925,00/);
-  await page.locator('select[name="payment"]').selectOption("TRANSFER");
+  await page.getByRole("button",{name:"Transferencia",exact:true}).click();
   await page.getByRole("button", { name: "Confirmar venta" }).click();
   await page.getByRole("status").filter({ hasText: "Venta registrada" }).waitFor();
   const memberSale = await db.sale.findFirstOrThrow({ where: { tenantId: tenant.id, customerId: member.id }, include: { lines: true } });
