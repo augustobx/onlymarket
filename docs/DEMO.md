@@ -21,3 +21,14 @@ Ejecutar únicamente cuando el PR y la CI de la seed estén aprobados. No hace f
 El historial de días anteriores es simulado: las compras de artículos unitarios, ventas y turnos se datan dentro del período de muestra después de registrarse a través de los servicios reales. Las fechas antiguas de dos lotes se ajustan expresamente para representar el paso del tiempo. Las ventas de hoy usan la hora real. No crea documentos fiscales, órdenes de compra pendientes, pagos electrónicos externos ni terminales físicas que no existen en el producto actual.
 
 La seed concilia cantidades y costos de todos los lotes con sus movimientos, totales de ventas y medios de pago, y efectivo esperado de los cierres. No está diseñada para reiniciarse sobre un comercio con datos: si se desea otra muestra, usar otro slug nuevo. No publicar las contraseñas en tickets ni en GitHub.
+
+## Cargar un comercio demo existente (superprueba)
+
+No crea otro tenant, no cambia la licencia, perfil, contraseñas, ni configuración del comercio. Agrega dos sucursales identificadas como OMDEMO, productos con SKU OMDEMO-, proveedores, socios y cinco cuentas de prueba nuevas (dos encargados, dos cajeros y depósito). El propietario existente conserva acceso a todo. Si los códigos de prueba colisionan o la seed ya comenzó, se rechaza el alta inicial. La conciliación se limita a los registros nuevos. Si una operación posterior falla, puede quedar una carga parcial; no se suspende el tenant existente ni se reintenta automáticamente. Conservar el respaldo previo. Ejecutar con la CI aprobada y sin usuarios operando el comercio demo.
+
+```bash
+cd /opt/apps/onlymarket
+sh scripts/backup.sh /opt/backups/onlymarket
+git fetch origin feat/demo-supermarket-seed
+git show origin/feat/demo-supermarket-seed:seed-demo.mjs | docker compose exec -T -e DEMO_MODE=existing -e DEMO_SLUG=superprueba -e DEMO_CONFIRM=CARGAR_SUPER_DEMO app node --input-type=module
+```

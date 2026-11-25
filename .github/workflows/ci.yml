@@ -79,6 +79,14 @@ jobs:
             exit 1
           fi
           grep 'ya está registrado' /tmp/demo-ci-repeat.log
+          BOOTSTRAP_SLUG=demo-ci-existing BOOTSTRAP_NAME='Existing demo fixture' BOOTSTRAP_EMAIL=existing-fixture@example.invalid BOOTSTRAP_PASSWORD=CI-only-existing-test-password node scripts/bootstrap.mjs
+          DEMO_MODE=existing DEMO_SLUG=demo-ci-existing DEMO_CONFIRM=CARGAR_SUPER_DEMO node seed-demo.mjs > /tmp/demo-ci-existing.log
+          grep 'DEMO CREADA Y CONCILIADA' /tmp/demo-ci-existing.log
+          if DEMO_MODE=existing DEMO_SLUG=demo-ci-existing DEMO_CONFIRM=CARGAR_SUPER_DEMO node seed-demo.mjs > /tmp/demo-ci-existing-repeat.log 2>&1; then
+            echo 'Existing seed unexpectedly duplicated'; exit 1
+          fi
+          grep 'ya fue iniciada' /tmp/demo-ci-existing-repeat.log
+          node --input-type=module -e 'import {PrismaClient} from "@prisma/client"; import assert from "node:assert/strict"; const db=new PrismaClient(); try { const t=await db.tenant.findUniqueOrThrow({where:{slug:"demo-ci-existing"}}); assert.equal(t.name,"Existing demo fixture"); assert.equal(t.licenseUntil,null); assert.equal(t.memberDiscountBps,0); assert.equal(t.suspended,false); assert.equal(await db.membership.count({where:{tenantId:t.id,role:"OWNER"}}),1); assert.equal(await db.branch.count({where:{tenantId:t.id}}),3); assert.equal(await db.product.count({where:{tenantId:t.id,sku:{startsWith:"OMDEMO-"}}}),44); } finally {await db.$disconnect()}'
       - name: Upload visual review screenshots
         if: always()
         uses: actions/upload-artifact@v4
