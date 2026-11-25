@@ -211,7 +211,10 @@ try {
   assert.equal(cheeseLot.remainingCostCents,600000n);
   await page.goto(tenantBase + "/transformaciones?view=nueva&sector=DELI");
   await page.getByRole("heading",{name:"Mesa de fraccionamiento"}).waitFor();
-  await page.getByLabel("Lote de origen",{exact:true}).selectOption(cheeseLot.id);
+  const sourcePicker = page.getByRole("combobox",{name:"Lote de origen",exact:true});
+  await sourcePicker.waitFor({state:"visible"});
+  assert.equal(await sourcePicker.locator("option").evaluateAll((options,id)=>options.filter(o=>o.value===id).length,cheeseLot.id),1,"El lote recibido debe estar disponible para fraccionamiento");
+  await sourcePicker.selectOption(cheeseLot.id);
   await page.getByLabel("Peso a transformar (kg)").fill("1");
   await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
   await page.getByLabel("Motivo / detalle 1").fill("Porcionado de prueba");

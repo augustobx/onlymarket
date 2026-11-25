@@ -81,3 +81,5 @@ html[data-theme=light][data-market-palette=orange] :is(.market-v2,.market-termin
 .v2-quicktiles button,.v2-methodgrid button,.v2-pos-pick>label,.v2-fields>label{min-width:0;overflow-wrap:anywhere}
 @media(max-width:760px){.v2-posbody,.v2-station-grid,.v2-production-grid,.v2-grid3,.v2-fields,.v2-dashgrid{grid-template-columns:minmax(0,1fr)}.v2-pos-pick,.v2-methodgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.market-terminal .metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.market-terminal .sectionhead{flex-wrap:wrap}.market-terminal .panel{padding:14px}.v2-poshead>.v2-actions{gap:6px}.v2-posback{font-size:12px}.v2-posright{padding:14px}.v2-pos-turn-summary{padding:10px}}
 }
+
+@media screen{.v2-output-product{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:180px}.v2-output-product>select,.v2-output-product>input{display:block;width:100%;max-width:100%;margin:0!important}.v2-entry-table td{vertical-align:middle}.v2-entry-table td:has(.v2-output-product){min-width:200px}}
