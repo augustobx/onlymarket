@@ -30,6 +30,11 @@ function probeNanoAppsRouter(routerUrl, fqdn) {
         timeout: 2500,
       },
       (res) => {
+        if (res.statusCode !== 404) {
+          resolve({ checked: res.statusCode < 500, claimed: res.statusCode < 500, error: null });
+          res.destroy();
+          return;
+        }
         const chunks = [];
         let size = 0;
         res.on("data", (c) => {
@@ -117,20 +122,20 @@ export async function checkSlugAvailability(prisma, rawSlug, options = {}) {
     };
   }
 
-  // A router lookup is not an atomic reservation. The shared NanoLabs router
-  // currently has no reservation contract, so even a 404 cannot authorize an
-  // allocation. Do not allow a local flag to bypass known shared namespaces.
-  const sharedBase = ["nanoapps.ar", "nanoapps.site"].includes(tenantBaseDomain);
-  if (sharedBase || (tenantBaseDomain !== "localhost" && env.TENANT_NAMESPACE_MODE !== "exclusive")) {
+  // Manual SuperAdmin provisioning follows the existing NanoLabs router.
+  // Local database uniqueness is atomic; cross-SaaS checks are best effort,
+  // not a reservation. Never bypass a missing or unreachable shared router.
+  const sharedBase = ["nanoapps.ar", "nanoapps.site"].includes(tenantBaseDomain)
+    || (tenantBaseDomain !== "localhost" && env.TENANT_NAMESPACE_MODE !== "exclusive");
+  const routerUrl = (typeof options.routerUrl === "string"
+    ? options.routerUrl
+    : (env.NANOAPPS_ROUTER_URL || "")).trim();
+  if (sharedBase && !routerUrl) {
     return {
-      available: false, slug, fqdn, url, code: "NAMESPACE_UNAVAILABLE",
-      reason: "Altas temporalmente bloqueadas: falta una reserva atómica de subdominios compartida por todos los SaaS.",
+      available: false, slug, fqdn, url, code: "ROUTER_UNAVAILABLE",
+      reason: "No está configurada la verificación de subdominios de NanoLabs.",
     };
   }
-
-  const routerUrl = typeof options.routerUrl === "string"
-    ? options.routerUrl
-    : (env.NANOAPPS_ROUTER_URL || "").trim();
   if (routerUrl) {
     const probe = await probeNanoAppsRouter(routerUrl, fqdn);
     if (probe.claimed) {
@@ -183,5 +188,6 @@ export async function checkSlugAvailability(prisma, rawSlug, options = {}) {
     url,
     code: "AVAILABLE",
     reason: "",
+    ...(sharedBase ? { warning: "verificado, sin reserva global" } : {}),
   };
 }

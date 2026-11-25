@@ -12,11 +12,9 @@
 - Zona horaria: `America/Argentina/Buenos_Aires`.
 - No ejecutar sobre bases de datos ni redes internas de otras aplicaciones. No usar `docker compose down -v` ni `prisma db push` / `migrate reset` en producción.
 
-## BLOQUEO DE PRODUCCIÓN: altas de comercios en nanoapps.ar
+## Alta manual, URL automática
 
-**No desplegar esta rama para clientes ni registrar OnlyMarket en el router compartido todavía.** El código rechaza las altas y el bootstrap de comercios en `nanoapps.ar` y `nanoapps.site` (NAMESPACE_UNAVAILABLE). El router actual no ofrece una reserva atómica global: un 404 puede representar un servicio caído o una respuesta negativa en caché. El chequeo y el alta son operaciones separadas; las carreras entre distintos SaaS no quedan protegidas por la unicidad local de PostgreSQL.
-
-Para desbloquear las altas conservando `{slug}.nanoapps.ar`, primero diseñar, aprobar y probar un registro global de reservas con unicidad por FQDN, reconciliación de slugs existentes y participación de todos los escritores de dominios. No usar `SLUG_CHECK_STRICT=false` ni `TENANT_NAMESPACE_MODE=exclusive` para eludir este bloqueo. Ningún cambio de router o NPM está autorizado por esta documentación.
+El administrador elige el slug y crea el comercio desde SuperAdmin. El router existente resuelve el dominio automáticamente. La comprobación de colisiones es preventiva, no una reserva global: el router puede tener una respuesta negativa en caché (5 s) o no detectar un SaaS caído. No reutilizar slugs de otros productos ni realizar altas simultáneas entre SaaS para el mismo slug. La unicidad dentro de OnlyMarket sí es atómica. Se puede configurar `EXTERNAL_SAAS_ASK_URLS` para consultar además endpoints hermanos que devuelvan 204/404; si no responden correctamente se bloquea el alta.
 
 ## 1. Arquitectura de dominios (objetivo de aprovisionamiento)
 
@@ -32,13 +30,13 @@ OnlyMarket implementa el estándar de subdominios de NanoLabs de manera completa
 - **Colisiones y aprovisionamiento DNS / Proxy / SSL**:
   - Bajo `*.nanoapps.ar`, DNS y SSL wildcard ya existen en Nginx Proxy Manager (`3.conf` → `nanoapps-router:8080`). No es necesario crear registros DNS, certificados ni Proxy Hosts por cada nuevo comercio.
   - `onlymarket-web` expone `GET /api/internal/caddy/ask?domain=<hostname>` devolviendo `204` para `PLATFORM_DOMAIN` y tenants registrados, y `404` para subdominios inexistentes o reservados de otros SaaS.
-  - Al crear un comercio, OnlyMarket valida el formato DNS, los slugs reservados y los duplicados locales. Para un dominio exclusivo autorizado puede consultar el router y endpoints ask; las altas compartidas se rechazan antes de esa consulta hasta que exista una reserva global.
+  - Al crear un comercio, OnlyMarket valida el formato DNS, los slugs reservados y los duplicados locales. En el dominio compartido requiere el router configurado y una respuesta de dominio libre; los endpoints ask adicionales configurados también deben aprobar la consulta. Si el router no responde, se rechaza el alta.
 - **Migración futura a dominio independiente**:
   - Para operar en un dominio propio (por ejemplo `onlymarket.com.ar`), configurar `PLATFORM_DOMAIN=admin.onlymarket.com.ar`, `TENANT_BASE_DOMAIN=onlymarket.com.ar` y `TENANT_NAMESPACE_MODE=exclusive` en `.env` **solo si NanoLabs tiene control exclusivo del dominio**, configurar DNS + Nginx Proxy Manager para `*.onlymarket.com.ar` → `onlymarket-web:3000` (certificado wildcard Let's Encrypt DNS-01) y recrear solo `onlymarket-web`.
 
-## 2. Instalación inicial en `/opt/apps/onlymarket` (referencia posterior al desbloqueo)
+## 2. Instalación inicial en `/opt/apps/onlymarket`
 
-No ejecutar estos pasos hasta completar el bloqueo anterior y confirmar CI verde del SHA exacto.
+Ejecutar únicamente con CI verde del SHA exacto y tras verificar el certificado wildcard y la conectividad al router.
 
 1. Clonar en `/opt/apps/onlymarket` y posicionarse en el commit exacto con CI verde:
    ```sh
@@ -75,7 +73,7 @@ No ejecutar estos pasos hasta completar el bloqueo anterior y confirmar CI verde
 4. **Nginx Proxy Manager (dominio SuperAdmin)**:
    - Crear Proxy Host para `onlymarket.nanoapps.ar` → Forward Hostname: `onlymarket-web`, Forward Port: `3000`, SSL Certificate: reutilizar wildcard `npm-3` (`*.nanoapps.ar`) o emitir certificado Let's Encrypt para `onlymarket.nanoapps.ar`, con **Force SSL** y **Block Common Exploits** activados.
    - No exponer PostgreSQL al host ni a `proxy`. No modificar el Proxy Host wildcard `#3` (`3.conf`).
-5. **Integración futura con nanoapps-router**: no editar ni reiniciar el router compartido mientras no exista un plan aprobado de registro global, prueba aislada, inventario de dominios existentes, ventana de cambios y rollback. No alcanza con añadir OnlyMarket a su arreglo de aplicaciones.
+5. **Integración con nanoapps-router**: respaldar server.mjs y conservar la imagen anterior; agregar al final de apps[] el objeto `{ name: 'onlymarket', checkUrl: 'http://onlymarket-web:3000/api/internal/caddy/ask', target: 'http://onlymarket-web:3000' }`. Validar sintaxis, construir y recrear solo router en una ventana breve, comprobar dominios existentes y conservar rollback. No cambiar el Proxy Host wildcard ni otros SaaS.
 6. Alta del administrador de plataforma (y primer comercio si aplica, o crearlo desde `/superadmin`) sin dejar secretos en historial:
    ```sh
    set +o history
@@ -85,7 +83,7 @@ No ejecutar estos pasos hasta completar el bloqueo anterior y confirmar CI verde
      app node scripts/bootstrap-platform.mjs
    set -o history
    ```
-   Luego ingresar en `https://onlymarket.nanoapps.ar` para verificar el panel. Las altas de comercios solo podrán habilitarse cuando se haya resuelto y probado la reserva global.
+   Luego ingresar en `https://onlymarket.nanoapps.ar` para verificar el panel. Crear un comercio de prueba con slug nuevo y verificar su URL HTTPS, login y aislamiento. Considerar hasta 5 segundos de caché negativa del router.
 
 ## 3. Actualización controlada
 Utilizar el script verificado con el SHA de 40 caracteres que ya tenga CI verde:

@@ -41,21 +41,35 @@ test("invalid domain configuration and implicit localhost aliases never grant pl
   assert.equal(resolveHostContext("onlymarket.nanoapps.ar", { PLATFORM_DOMAIN: "bad host" }).kind, "unknown");
 });
 
-test("shared namespaces deny concurrent allocations even with legacy strict=false or exclusive overrides", async () => {
+test("manual shared-domain provisioning requires a live router check, not a flag override", async () => {
   const prisma = { tenant: { findUnique: async () => null } };
-  for (const base of ["nanoapps.ar", "nanoapps.site", "shared.example.test"]) {
-    const attempts = await Promise.all(Array.from({ length: 12 }, () => checkSlugAvailability(prisma, "same-slug", {
-      env: { TENANT_BASE_DOMAIN: base, SLUG_CHECK_STRICT: "false", TENANT_NAMESPACE_MODE: base.startsWith("nanoapps") ? "exclusive" : "shared" },
-    })));
-    assert.ok(attempts.every((r) => !r.available && r.code === "NAMESPACE_UNAVAILABLE"));
-  }
+  const server = http.createServer((req, res) => {
+    if (req.headers.host === "occupied.nanoapps.ar") {
+      res.writeHead(302, { Location: "/login" }); res.end(); return;
+    }
+    res.writeHead(404); res.end("Tenant not found");
+  });
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const routerUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    for (const base of ["nanoapps.ar", "nanoapps.site", "shared.example.test"]) {
+      const env = { TENANT_BASE_DOMAIN: base, SLUG_CHECK_STRICT: "false", TENANT_NAMESPACE_MODE: base.startsWith("nanoapps") ? "exclusive" : "shared" };
+      assert.equal((await checkSlugAvailability(prisma, "same-slug", { env })).code, "ROUTER_UNAVAILABLE");
+      assert.equal((await checkSlugAvailability(prisma, "same-slug", { env, routerUrl: "http://127.0.0.1:1" })).code, "ROUTER_UNAVAILABLE");
+      const free = await checkSlugAvailability(prisma, "same-slug", { env, routerUrl });
+      assert.equal(free.available, true);
+      assert.equal(free.url, `https://same-slug.${base}`);
+      assert.ok(free.warning);
+    }
+    assert.equal((await checkSlugAvailability(prisma, "occupied", { env: { TENANT_BASE_DOMAIN: "nanoapps.ar" }, routerUrl })).code, "EXTERNAL_COLLISION");
+  } finally { await new Promise(r => server.close(r)); }
 });
 
 test("configured sibling failures and redirects never mean availability", async () => {
   const prisma = { tenant: { findUnique: async () => null } };
   const env = { TENANT_BASE_DOMAIN: "localhost" };
   const server = http.createServer((req, res) => {
-    res.writeHead(Number(req.url.slice(1)) || 500, { Location: "/204" }); res.end();
+    res.writeHead(Number(new URL(req.url, "http://localhost").pathname.slice(1)) || 500, { Location: "/204" }); res.end();
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -65,6 +79,8 @@ test("configured sibling failures and redirects never mean availability", async 
       assert.equal(result.available, false);
       assert.equal(result.code, "ROUTER_UNAVAILABLE");
     }
+    assert.equal((await checkSlugAvailability(prisma, "test-slug", { env, externalAskUrls: `${base}/204` })).code, "EXTERNAL_COLLISION");
+    assert.equal((await checkSlugAvailability(prisma, "test-slug", { env, externalAskUrls: `${base}/404` })).available, true);
     assert.equal((await checkSlugAvailability(prisma, "test-slug", { env, externalAskUrls: "http://127.0.0.1:1" })).available, false);
   } finally { await new Promise((r) => server.close(r)); }
 });
