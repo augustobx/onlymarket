@@ -108,6 +108,7 @@ export function getPalette(id?: string | null): ColorPalette {
 export function applyPaletteToDOM(palette: ColorPalette, isDark = false) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  root.dataset.marketPalette = palette.id;
   root.style.setProperty("--color-brand", palette.primary);
   root.style.setProperty("--color-brand-hover", palette.hover);
   root.style.setProperty("--color-brand-ring", palette.glow);

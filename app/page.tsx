@@ -28,7 +28,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{branch?
  WITH activity AS (
  SELECT sa."createdAt" event_at,sa."totalCents" amount FROM "Sale" sa JOIN "CashShift" sh ON sh."tenantId"=sa."tenantId" AND sh.id=sa."shiftId" LEFT JOIN "SaleCancellation" c ON c."tenantId"=sa."tenantId" AND c."saleId"=sa.id WHERE sa."tenantId"=${tenantId} AND sa."createdAt">=${start} AND sa."createdAt"<${end} AND c.id IS NULL ${sqlBranch}
  UNION ALL SELECT r."createdAt",-r."refundCents" FROM "SaleReturn" r JOIN "CashShift" sh ON sh."tenantId"=r."tenantId" AND sh.id=r."shiftId" WHERE r."tenantId"=${tenantId} AND r."createdAt">=${start} AND r."createdAt"<${end} ${sqlBranch})
- SELECT EXTRACT(HOUR FROM (event_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires'))::int hour,SUM(amount)::bigint amount FROM activity GROUP BY 1 ORDER BY 1`:Promise.resolve([] as Hour[]),
+ SELECT EXTRACT(HOUR FROM (event_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires'))::int AS "hour",SUM(amount)::bigint amount FROM activity GROUP BY 1 ORDER BY 1`:Promise.resolve([] as Hour[]),
  manager?tx.$queryRaw<SectorTotal[]>`
  WITH activity AS (
  SELECT p.sector::text sector,sl."totalCents" amount FROM "SaleLine" sl JOIN "Sale" sa ON sa."tenantId"=sl."tenantId" AND sa.id=sl."saleId" JOIN "CashShift" sh ON sh."tenantId"=sa."tenantId" AND sh.id=sa."shiftId" JOIN "Product" p ON p."tenantId"=sl."tenantId" AND p.id=sl."productId" LEFT JOIN "SaleCancellation" c ON c."tenantId"=sa."tenantId" AND c."saleId"=sa.id WHERE sa."tenantId"=${tenantId} AND sa."createdAt">=${start} AND sa."createdAt"<${end} AND c.id IS NULL ${sqlBranch}

@@ -62,3 +62,10 @@ html[data-theme=light] :is(.market-v2,.market-terminal,.om-platform){--bg-surfac
 .om-platform .v2-pagehead h1{font-size:27px}.market-v2 .v2-card .status,.market-terminal .v2-card .status,.om-platform .status{border-radius:5px;font-size:11px}.market-v2 .v2-card .status::before,.market-terminal .v2-card .status::before,.om-platform .status::before{content:"";display:inline-block;width:6px;height:6px;background:currentColor;border-radius:50%;margin-right:6px;vertical-align:1px}.market-v2 .v2-card .status.AVAILABLE,.market-terminal .v2-card .status.AVAILABLE,.om-platform .status.AVAILABLE{color:#176d4b;background:#e7f4eb}.market-v2 .v2-card .status.REVIEW{color:#996013;background:#fff3da}.market-v2 .v2-card .status.BLOCKED{color:#a33435;background:#fcebec}.market-v2 .v2-card .tablewrap,.market-terminal .v2-card .tablewrap{max-width:100%}
 .market-v2 .v2-stack .panel{margin:0}.v2-station-form{min-width:0}.market-v2 .v2-card .v2-pad .formgrid{margin:0}.market-v2 .v2-card table td small{white-space:normal}.market-v2 .v2-card table td:first-child small{overflow-wrap:anywhere}
 }
+
+@media screen{
+html[data-theme=light][data-market-palette=orange] :is(.market-v2,.market-terminal,.om-platform){--v2-accent:#c45321;--bg-primary-default:#c45321;--bg-primary-bold:#a94319;--bg-primary-subtlest:#fff1e8;--color-brand:#c45321;--color-brand-hover:#a94319}
+.market-v2:not(.workspace--collapsed) .aside-top{position:relative;padding-bottom:16px}.market-v2:not(.workspace--collapsed) .collapse-btn{width:24px;height:24px;min-height:24px;position:absolute;right:0;bottom:-8px}.market-v2 .tenantcard small{font-size:9px}.market-v2 .brandtext{white-space:nowrap}.market-v2 .brandmark{flex-shrink:0}
+.market-terminal .v2-poshead .brandmark{width:34px;height:34px;background:#c45321;box-shadow:none}
+.market-v2 .v2-chart-axis small{white-space:nowrap}
+}
