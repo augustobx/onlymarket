@@ -6,6 +6,7 @@ import {classifyLot} from "../../src/domain/inventory.mjs";
 import {localDay} from "../../src/domain/parse.mjs";
 import {expectedCash} from "../../src/server/sales.mjs";
 import {eligiblePromotions} from "../../src/domain/sales.mjs";
+import {getCustomerPointsSummary} from "../../src/server/loyalty.mjs";
 import {logoutAction} from "../actions";
 import {Operation} from "../operations";
 import {Shell,Notice,Field,money} from "../ui";
@@ -35,11 +36,13 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
  ]);
 
  const today=localDay();
- const [settings,customers,combos]=await Promise.all([
-  db.tenant.findUniqueOrThrow({where:{id:s.tenantId},select:{weightPrefix:true,memberDiscountBps:true}}),
+ const [settings,customers,combos,pointsSummary]=await Promise.all([
+  db.tenant.findUniqueOrThrow({where:{id:s.tenantId},select:{weightPrefix:true,memberDiscountBps:true,pointValueCents:true}}),
   db.customer.findMany({where:{tenantId:s.tenantId,active:true},select:{id:true,name:true,code:true},orderBy:{name:"asc"},take:500}),
   db.combo.findMany({where:{tenantId:s.tenantId,active:true,startsOn:{lte:new Date(today+"T00:00:00Z")},endsOn:{gte:new Date(today+"T00:00:00Z")}}}),
+  getCustomerPointsSummary(db,s.tenantId) as Promise<{id:string;available:bigint}[]>,
  ]);
+ const ptsById=new Map(pointsSummary.map(x=>[x.id,x.available]));
 
  const [lots,promos,sales,totals,movements,returns]=shift
   ?await Promise.all([
@@ -67,6 +70,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
    code:l.code,
    unit:l.product.unit,
    sector:l.product.sector,
+   quickAccess:l.product.quickAccess,
    quantity:l.quantityMilli.toString(),
    price:l.product.salePriceCents.toString(),
    promotions:eligible.map((p:typeof promoDates[number])=>({
@@ -163,9 +167,10 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       <Cart
        key={shift.id+":"+String(sales[0]?.id??"")}
        lots={available}
-       customers={customers}
+       customers={customers.map(c=>({...c,availablePoints:(ptsById.get(c.id)??0n).toString()}))}
        weightPrefix={settings.weightPrefix}
        memberBps={settings.memberDiscountBps}
+       pointValueCents={settings.pointValueCents.toString()}
        combos={combos.map(c=>({
         id:c.id,
         name:c.name,
@@ -325,6 +330,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
           <th>Esperado</th>
           <th>Contado</th>
           <th>Diferencia</th>
+          <th>Arqueo</th>
          </tr>
         </thead>
         <tbody>
@@ -340,6 +346,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
              <span className={"status "+(diff===0n?"AVAILABLE":diff<0n?"BLOCKED":"REVIEW")}>
               {money(diff)}
              </span>
+            </td>
+            <td>
+             <Link className="om-link-chip" href={"/pos/cierre/"+c.id}>
+              <Icon name="printer" size={13}/>
+              <span>Ver cierre</span>
+             </Link>
             </td>
            </tr>
           );

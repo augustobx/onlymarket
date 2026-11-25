@@ -29,6 +29,39 @@ export function quotePromotion(price,quantity,unit,promotions){
  }
  return result;
 }
+/**
+ * Combine quantities across multiple lots of the same product when a product-wide promotion
+ * (not scoped to a single lot or expiry window) yields a strictly lower total than per-lot quotes.
+ */
+export function quoteMultiLotPromotions(items){
+ const results=items.map(item=>quotePromotion(item.unitPrice,item.quantity,item.unit,item.promotions));
+ const groups=new Map();
+ items.forEach((item,index)=>{
+  const list=groups.get(item.productId)??[];
+  list.push(index);
+  groups.set(item.productId,list);
+ });
+ for(const indices of groups.values()){
+  if(indices.length<2)continue;
+  const first=items[indices[0]];
+  const sharedPromos=first.promotions.filter(p=>!p.lotId&&p.expiryWithinDays==null&&indices.every(i=>items[i].promotions.some(op=>op.id===p.id)));
+  if(!sharedPromos.length)continue;
+  const totalQty=indices.reduce((sum,i)=>sum+items[i].quantity,0n);
+  const currentTotal=indices.reduce((sum,i)=>sum+results[i].total,0n);
+  const combined=quotePromotion(first.unitPrice,totalQty,first.unit,sharedPromos);
+  if(combined.total>=currentTotal)continue;
+  const groupSubtotal=indices.reduce((sum,i)=>sum+results[i].subtotal,0n);
+  if(groupSubtotal===0n)continue;
+  let cumulative=0n,allocated=0n;
+  for(const i of indices){
+   cumulative+=results[i].subtotal;
+   const next=combined.total*cumulative/groupSubtotal;
+   results[i]={subtotal:results[i].subtotal,total:next-allocated,promotionId:combined.promotionId,promotionLabel:combined.promotionLabel,discountBps:combined.discountBps};
+   allocated=next;
+  }
+ }
+ return results;
+}
 export function priceLine(price,quantity,discountBps=0){
  checked(price);checked(quantity);
  if(!quantity||!Number.isInteger(discountBps)||discountBps<0||discountBps>=10000)throw new Error("Cantidad o descuento inválido");

@@ -50,6 +50,7 @@ export async function Shell({
   ]}]:[]),
   ...(s.role!=="CASHIER"&&showTransform(s.profile)?[{name:"Producción y frescos",items:[
    {href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale" as IconName},
+   {href:"/verduleria",label:"Verdulería y frescos",icon:"apple" as IconName},
   ]}]:[]),
   ...(manager?[{name:"Comercial",items:[
    {href:"/promociones",label:"Promociones",icon:"tag" as IconName},
@@ -58,6 +59,7 @@ export async function Shell({
    {href:"/ventas",label:"Ventas y anulaciones",icon:"receipt" as IconName},
    {href:"/finanzas",label:"Finanzas",icon:"wallet" as IconName},
    {href:"/informes",label:"Informes",icon:"chart" as IconName},
+   {href:"/auditoria",label:"Auditoría",icon:"shield" as IconName},
   ]}]:[]),
   ...(s.role==="OWNER"?[{name:"Administración",items:[
    {href:"/administracion",label:"Sucursales y equipo",icon:"shield" as IconName},

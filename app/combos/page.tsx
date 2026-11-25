@@ -60,25 +60,30 @@ export default async function Page({searchParams}:{searchParams:Promise<{ok?:str
    <SectionCard title="Combos registrados" subtitle="Ofertas combinadas activas e históricas" icon="sparkles" padded>
     {combos.length>0?(
      <div className="om-card-grid">
-      {combos.map(c=>(
-       <article className="om-list-card" key={c.id}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
-         <strong>{c.name}</strong>
-         <span className={"status "+(c.active?"AVAILABLE":"EXHAUSTED")}>{c.active?"Habilitado":"Desactivado"}</span>
-        </div>
-        <strong className="mono" style={{fontSize:18}}>{money(c.priceCents)}</strong>
-        <p style={{margin:0,fontSize:12.5}}>
-         {(c.items as {productId:string;units:number}[]).map(i=>i.units+" × "+(products.find(p=>p.id===i.productId)?.name??"Producto inactivo")).join(" + ")}
-        </p>
-        <small className="mono">{c.startsOn.toISOString().slice(0,10)} a {c.endsOn.toISOString().slice(0,10)}</small>
-        {c.active&&(
+      {combos.map(c=>{
+       const start=c.startsOn.toISOString().slice(0,10);
+       const end=c.endsOn.toISOString().slice(0,10);
+       const label=!c.active?"Desactivado":today<start?"Programado":today>end?"Finalizado":"Vigente";
+       const cls=!c.active?"EXHAUSTED":today<start?"REVIEW":today>end?"BLOCKED":"AVAILABLE";
+       return (
+        <article className="om-list-card" key={c.id}>
+         <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+          <strong>{c.name}</strong>
+          <span className={"status "+cls}>{label}</span>
+         </div>
+         <strong className="mono" style={{fontSize:18}}>{money(c.priceCents)}</strong>
+         <p style={{margin:0,fontSize:12.5}}>
+          {(c.items as {productId:string;units:number}[]).map(i=>i.units+" × "+(products.find(p=>p.id===i.productId)?.name??"Producto inactivo")).join(" + ")}
+         </p>
+         <small className="mono">{start} a {end}</small>
          <form action={comboAction}>
           <input type="hidden" name="id" value={c.id}/>
-          <button className="secondary">Desactivar combo</button>
+          <input type="hidden" name="active" value={c.active?"no":"yes"}/>
+          <button className="secondary">{c.active?"Desactivar combo":"Reactivar combo"}</button>
          </form>
-        )}
-       </article>
-      ))}
+        </article>
+       );
+      })}
      </div>
     ):(
      <EmptyState icon="sparkles" title="Sin combos registrados" description="Combiná productos por unidad con un precio promocional cerrado."/>

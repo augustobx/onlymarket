@@ -2325,6 +2325,20 @@ td small {
   color: #334155;
 }
 
+.ticketwrap-58 .ticket {
+  max-width: 240px;
+  padding: 14px;
+  font-size: 11px;
+}
+
+.ticketwrap-58 .ticket h1 {
+  font-size: 16px;
+}
+
+.ticketwrap-58 .ticket h2 {
+  font-size: 13px;
+}
+
 .ticketline {
   display: grid;
   gap: 4px;
@@ -2416,6 +2430,34 @@ td small {
   max-width: 52mm;
   margin: auto;
   width: 100%;
+}
+
+.stocklabel--shelf {
+  width: 90mm;
+  min-height: 55mm;
+  padding: 4mm;
+  border: 2px solid #0f172a;
+}
+
+.stocklabel--shelf h2 {
+  font-size: 20px;
+}
+
+.shelfprice {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+}
+
+.shelfprice strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.shelfprice span {
+  font-size: 13px;
+  color: #334155;
 }
 
 /* ================= RESPONSIVE BREAKPOINTS ================= */
@@ -2588,12 +2630,32 @@ td small {
     font: 11px monospace;
   }
 
+  .ticketwrap-58 .ticket {
+    max-width: 54mm;
+    padding: 1.5mm;
+    font-size: 10px;
+  }
+
   .ticket h1,
   .ticket h2 {
     color: #000;
   }
 
-  .ticketline {
+  .ticketwrap-58 .ticket {
+  max-width: 240px;
+  padding: 14px;
+  font-size: 11px;
+}
+
+.ticketwrap-58 .ticket h1 {
+  font-size: 16px;
+}
+
+.ticketwrap-58 .ticket h2 {
+  font-size: 13px;
+}
+
+.ticketline {
     break-inside: avoid;
   }
 
@@ -2613,6 +2675,11 @@ td small {
     border: 0;
     width: 64mm;
     margin: 0;
+  }
+
+  .stocklabel--shelf {
+    width: 90mm;
+    border: 1.5px solid #000000;
   }
 
   .stocklabel:last-child {

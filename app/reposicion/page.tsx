@@ -70,27 +70,33 @@ export default async function Page({
     title="Stock mínimo y reposición"
     subtitle="Sugerencias de compra o traslado según mínimos configurados por sucursal."
     actions={
-     manager?(
-      <Operation
-       title="Configurar mínimo y objetivo"
-       trigger="Configurar objetivo de stock"
-       description="El mínimo activa la alerta cuando el stock apto cae por debajo; el objetivo define la cantidad sugerida."
-      >
-       <form action={targetAction} className="fields">
-        <Field label="Sucursal">
-         <select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
-        </Field>
-        <Field label="Producto">
-         <select name="productId">
-          {products.map(p=><option key={p.id} value={p.id}>{p.name} · {p.unit==="KG"?"kg":"u."}</option>)}
-         </select>
-        </Field>
-        <Field label="Stock mínimo"><input name="minimum" inputMode="decimal" required/></Field>
-        <Field label="Stock objetivo"><input name="target" inputMode="decimal" required/></Field>
-        <button disabled={!branches.length||!products.length}>Guardar objetivo</button>
-       </form>
-      </Operation>
-     ):undefined
+     <div className="om-row-actions">
+      <a className="actionlink secondarylink" href={"/api/export?"+new URLSearchParams({type:"reposicion",...(query.branch?{branch:query.branch}:{}),...(query.only?{only:query.only}:{})}).toString()}>
+       <Icon name="layers" size={15}/>
+       <span>Exportar CSV</span>
+      </a>
+      {manager&&(
+       <Operation
+        title="Configurar mínimo y objetivo"
+        trigger="Configurar objetivo de stock"
+        description="El mínimo activa la alerta cuando el stock apto cae por debajo; el objetivo define la cantidad sugerida."
+       >
+        <form action={targetAction} className="fields">
+         <Field label="Sucursal">
+          <select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+         </Field>
+         <Field label="Producto">
+          <select name="productId">
+           {products.map(p=><option key={p.id} value={p.id}>{p.name} · {p.unit==="KG"?"kg":"u."}</option>)}
+          </select>
+         </Field>
+         <Field label="Stock mínimo"><input name="minimum" inputMode="decimal" required/></Field>
+         <Field label="Stock objetivo"><input name="target" inputMode="decimal" required/></Field>
+         <button disabled={!branches.length||!products.length}>Guardar objetivo</button>
+        </form>
+       </Operation>
+      )}
+     </div>
     }
    />
 

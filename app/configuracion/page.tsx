@@ -56,6 +56,9 @@ export default async function Page({searchParams}:{searchParams:Promise<{ok?:str
       <Field label="Pesos de compra neta por punto">
        <input name="points" defaultValue={fixed(t.pointsEveryCents,2)} required inputMode="decimal"/>
       </Field>
+      <Field label="Valor por punto canjeado ($)">
+       <input name="pointValue" defaultValue={fixed(t.pointValueCents,2)} required inputMode="decimal"/>
+      </Field>
       <Field label="Descuento socios (%)">
        <input name="memberDiscount" defaultValue={fixed(BigInt(t.memberDiscountBps),2)} required inputMode="decimal"/>
       </Field>

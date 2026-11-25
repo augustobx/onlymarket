@@ -8,10 +8,11 @@ import {redirect} from "next/navigation";
 import {revalidatePath} from "next/cache";
 export async function comboAction(f:FormData){
  const s=await requireSession();let error="";
- const isDisable=Boolean(String(f.get("id")??""));
+ const isToggle=Boolean(String(f.get("id")??""));
+ const enable=isToggle&&String(f.get("active")??"")==="yes";
  try{await serial(db,async (tx:import("@prisma/client").Prisma.TransactionClient)=>{
   await authorizeSale(tx,s,["OWNER","MANAGER"]);
-  const id=String(f.get("id")??"");if(id){await tx.combo.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{active:false}});return;}
+  const id=String(f.get("id")??"");if(id){await tx.combo.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{active:enable}});return;}
   const name=textField(String(f.get("name")??""),"Nombre",120),priceCents=decimal(String(f.get("price")??""),2,"Precio",{allowZero:true});
   const startsOn=dateInput(String(f.get("start")??"")),endsOn=dateInput(String(f.get("end")??""));
   if(!startsOn||!endsOn||startsOn>endsOn)throw new Error("Fechas inválidas");
@@ -21,5 +22,5 @@ export async function comboAction(f:FormData){
   await tx.combo.create({data:{tenantId:s.tenantId,name,priceCents,startsOn,endsOn,items}});
  });}catch(e){error=actionError(e,"No se pudo guardar el combo");}
  revalidatePath("/combos");revalidatePath("/pos");
- redirect("/combos?"+(error?"error="+encodeURIComponent(error):"ok="+(isDisable?"combo_disabled":"combo_created")));
+ redirect("/combos?"+(error?"error="+encodeURIComponent(error):"ok="+(isToggle?(enable?"combo_enabled":"combo_disabled"):"combo_created")));
 }

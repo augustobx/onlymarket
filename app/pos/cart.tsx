@@ -5,7 +5,7 @@ import {saleAction} from "./actions";
 import {decimal} from "../../src/domain/parse.mjs";
 import {decodeWeight} from "../../src/domain/barcode.mjs";
 import {basketQuote} from "../../src/domain/combos.mjs";
-import {quotePromotion,paymentBreakdown} from "../../src/domain/sales.mjs";
+import {quoteMultiLotPromotions,paymentBreakdown} from "../../src/domain/sales.mjs";
 import {Icon,type IconName} from "../components/icons";
 
 type Promo={id:string;name:string;discountBps:number;minimumMilli:string|null;buyUnits:number|null;payUnits:number|null};
@@ -19,10 +19,17 @@ type Option={
  code:string;
  unit:string;
  sector?:string;
+ quickAccess?:boolean;
  quantity:string;
  price:string;
  promotions:Promo[];
  expiry:string|null;
+};
+type ParkedSale={
+ id:string;
+ savedAt:string;
+ customerId:string;
+ cart:Record<string,string>;
 };
 
 const sectorTabs:[string,string,IconName][]=[
@@ -57,14 +64,16 @@ export default function Cart({
  customers,
  weightPrefix,
  memberBps,
+ pointValueCents="0",
  combos,
 }:{
  lots:Option[];
  shiftId:string;
  requestKey:string;
- customers:{id:string;name:string;code:string}[];
+ customers:{id:string;name:string;code:string;availablePoints?:string}[];
  weightPrefix:string|null;
  memberBps:number;
+ pointValueCents?:string;
  combos:{id:string;name:string;items:{productId:string;units:number}[];priceCents:string}[];
 }){
  const [search,setSearch]=useState("");
@@ -75,14 +84,46 @@ export default function Cart({
  const [payment,setPayment]=useState("CASH");
  const [tendered,setTendered]=useState("");
  const [error,setError]=useState("");
+ const [info,setInfo]=useState("");
  const scanRef=useRef<HTMLInputElement>(null);
  const quantityRef=useRef<HTMLInputElement>(null);
  const [fast,setFast]=useState(true);
  const [customerId,setCustomerId]=useState("");
+ const [parked,setParked]=useState<ParkedSale[]>([]);
  const decoded=decodeWeight(search.trim(),weightPrefix);
  const [split,setSplit]=useState({cashCents:"",debitCents:"",creditCents:"",transferCents:""});
 
+ const parkedKey=`om_pos_parked_${shiftId}`;
+
+ useEffect(()=>{
+  try{
+   const raw=localStorage.getItem(parkedKey);
+   if(raw){
+    const parsed=JSON.parse(raw);
+    if(Array.isArray(parsed))setParked(parsed.slice(0,10));
+   }
+  }catch{}
+ },[parkedKey]);
+
+ const persistParked=(next:ParkedSale[])=>{
+  setParked(next);
+  try{
+   if(next.length)localStorage.setItem(parkedKey,JSON.stringify(next));
+   else localStorage.removeItem(parkedKey);
+  }catch{}
+ };
+
  const byId=useMemo(()=>new Map(lots.map(l=>[l.id,l])),[lots]);
+ const byProduct=useMemo(()=>{
+  const map=new Map<string,Option[]>();
+  for(const l of lots){
+   const list=map.get(l.productId)??[];
+   list.push(l);
+   map.set(l.productId,list);
+  }
+  return map;
+ },[lots]);
+
  const exactIndex=useMemo(()=>{
   const index=new Map<string,Option[]>();
   for(const l of lots){
@@ -110,17 +151,58 @@ export default function Cart({
  const chosen=byId.get(selected);
  if(chosen&&!options.some(l=>l.id===chosen.id))options.unshift(chosen);
 
+ function addProductFEFO(productId:string,quantityStr:string){
+  try{
+   const productLots=byProduct.get(productId)??[];
+   if(!productLots.length)throw new Error("Producto sin stock disponible");
+   const unit=productLots[0].unit;
+   const requested=decimal(quantityStr,3,"Cantidad");
+   if(unit==="UNIT"&&requested%1000n)throw new Error("Solo unidades enteras");
+
+   const nextCart={...cart};
+   let remaining=requested;
+   let distinctLots=Object.keys(nextCart).length;
+   for(const lot of productLots){
+    if(remaining<=0n)break;
+    const used=BigInt(nextCart[lot.id]??"0");
+    const avail=BigInt(lot.quantity)-used;
+    if(avail<=0n)continue;
+    const take=avail<remaining?avail:remaining;
+    if(!nextCart[lot.id]){
+     distinctLots++;
+     if(distinctLots>100)throw new Error("Máximo 100 lotes por venta");
+    }
+    nextCart[lot.id]=(used+take).toString();
+    remaining-=take;
+   }
+   if(remaining>0n)throw new Error("Stock insuficiente");
+   setCart(nextCart);
+   setSearch("");
+   setSelected("");
+   setQty("1");
+   setError("");
+   setInfo("");
+   scanRef.current?.focus();
+  }catch(e){
+   setError(e instanceof Error?e.message:"Cantidad inválida");
+  }
+ }
+
  const choose=()=>{
+  setInfo("");
   if(decoded){
    const candidates=matches;
-   if(candidates.length===1){
-    setSelected(candidates[0].id);
-    setQty(fixed(BigInt(decoded.quantityMilli),3));
+   const reqWeight=BigInt(decoded.quantityMilli);
+   const fefoLot=candidates.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>=reqWeight)??candidates[0];
+   if(fefoLot){
+    setSelected(fefoLot.id);
+    setQty(fixed(reqWeight,3));
     setError("");
+    if(candidates.length>1)setInfo(`Lote sugerido por FEFO (${fefoLot.code}).`);
    }else{
     setSelected("");
-    setQty(fixed(BigInt(decoded.quantityMilli),3));
-    setError(candidates.length?"Seleccioná lote físico para este peso":"PLU no encontrado");
+    setQty(fixed(reqWeight,3));
+    setError("PLU no encontrado");
    }
    return;
   }
@@ -130,21 +212,27 @@ export default function Cart({
    setError("Código de peso inválido");
    return;
   }
-  const exact=exactIndex.get(search.trim())??[];
-  if(exact.length===1){
-   if(fast&&exact[0].unit==="UNIT"){
-    add(exact[0].id,"1");
+  const trimmed=search.trim();
+  const exact=exactIndex.get(trimmed)??[];
+  const productIds=new Set(exact.map(l=>l.productId));
+  if(exact.length>=1&&productIds.size===1){
+   const firstAvailable=exact.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>0n)??exact[0];
+   const isExactLotCode=exact.length===1&&exact[0].code===trimmed;
+   if(fast&&firstAvailable.unit==="UNIT"){
+    if(isExactLotCode)add(firstAvailable.id,"1");
+    else addProductFEFO(firstAvailable.productId,"1");
     return;
    }
-   setSelected(exact[0].id);
-   setQty(exact[0].unit==="UNIT"?"1":"");
+   setSelected(firstAvailable.id);
+   setQty(firstAvailable.unit==="UNIT"?"1":"");
    setError("");
+   if(exact.length>1)setInfo(`Lote sugerido por FEFO (${firstAvailable.code}). Podés cambiarlo en la lista.`);
    quantityRef.current?.focus();
   }else{
    setSelected("");
    setError(
     exact.length>1
-     ?"Hay varios lotes con ese código: seleccioná el lote físico de la lista."
+     ?"Hay varios productos con ese código: seleccioná el lote físico de la lista."
      :matches.length===0
       ?"Producto o código no encontrado / sin stock"
       :"Seleccioná un producto y su lote."
@@ -166,30 +254,47 @@ export default function Cart({
    setSelected("");
    setQty("1");
    setError("");
+   setInfo("");
    scanRef.current?.focus();
   }catch(e){
    setError(e instanceof Error?e.message:"Cantidad inválida");
   }
  }
 
- const rawRows=Object.entries(cart)
+ const cartItems=Object.entries(cart)
   .sort(([a],[b])=>a.localeCompare(b))
   .flatMap(([id,q])=>{
    const lot=byId.get(id);
    if(!lot)return [];
-   const n=BigInt(q);
-   return [{lot,n,...quotePromotion(BigInt(lot.price),n,lot.unit,lot.promotions)}];
+   return [{lot,n:BigInt(q)}];
   });
 
+ const lotQuotes=quoteMultiLotPromotions(
+  cartItems.map(r=>({
+   productId:r.lot.productId,
+   unit:r.lot.unit,
+   unitPrice:BigInt(r.lot.price),
+   quantity:r.n,
+   promotions:r.lot.promotions,
+  }))
+ );
+
  const quotes=basketQuote(
-  rawRows.map(r=>({productId:r.lot.productId,unit:r.lot.unit,unitPrice:BigInt(r.lot.price),quantity:r.n,price:r})),
+  cartItems.map((r,i)=>({
+   productId:r.lot.productId,
+   unit:r.lot.unit,
+   unitPrice:BigInt(r.lot.price),
+   quantity:r.n,
+   promotions:r.lot.promotions,
+   price:lotQuotes[i],
+  })),
   combos,
   customerId?memberBps:0
  );
 
- const rows:{lot:Option;n:bigint;subtotal:bigint;total:bigint;promotionLabel:string|null}[]=rawRows.map((r,i)=>({
+ const rows:{lot:Option;n:bigint;subtotal:bigint;total:bigint;promotionLabel:string|null}[]=cartItems.map((r,i)=>({
   lot:r.lot,
-  n:BigInt(r.n),
+  n:r.n,
   subtotal:BigInt(quotes[i].subtotal),
   total:BigInt(quotes[i].total),
   promotionLabel:quotes[i].promotionLabel??null,
@@ -228,7 +333,9 @@ export default function Cart({
    if(sectorFilter&&l.sector!==sectorFilter)continue;
    if(!map.has(l.productId))map.set(l.productId,l);
   }
-  return [...map.values()].slice(0,12);
+  return [...map.values()]
+   .sort((a,b)=>Number(Boolean(b.quickAccess))-Number(Boolean(a.quickAccess)))
+   .slice(0,16);
  },[lots,sectorFilter]);
 
  useEffect(()=>{
@@ -244,17 +351,56 @@ export default function Cart({
  },[]);
 
  const selectQuick=(l:Option)=>{
-  setSearch(l.name);
-  setSelected("");
   const choices=lots.filter(x=>x.productId===l.productId);
-  if(choices.length===1&&l.unit==="UNIT"){
-   add(l.id,"1");
-  }else{
-   setSelected(choices.length===1?l.id:"");
-   setQty(l.unit==="KG"?"":"1");
-   setError(choices.length>1?"Seleccioná el lote físico":"");
-   quantityRef.current?.focus();
+  if(fast&&l.unit==="UNIT"){
+   addProductFEFO(l.productId,"1");
+   return;
   }
+  const firstAvailable=choices.find(x=>BigInt(x.quantity)-BigInt(cart[x.id]??"0")>0n)??choices[0];
+  setSearch(l.name);
+  setSelected(firstAvailable?.id??"");
+  setQty(l.unit==="KG"?"":"1");
+  setError("");
+  setInfo(choices.length>1&&firstAvailable?`Lote sugerido por FEFO (${firstAvailable.code}).`:"");
+  quantityRef.current?.focus();
+ };
+
+ const parkCurrentSale=()=>{
+  if(!rows.length)return;
+  const entry:ParkedSale={
+   id:String(Date.now()),
+   savedAt:new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}),
+   customerId,
+   cart,
+  };
+  persistParked([entry,...parked].slice(0,10));
+  setCart({});
+  setCustomerId("");
+  setTendered("");
+  setError("");
+  setInfo("Venta guardada en pausa.");
+  scanRef.current?.focus();
+ };
+
+ const resumeParkedSale=(entry:ParkedSale)=>{
+  const rest=parked.filter(p=>p.id!==entry.id);
+  const nextParked=rows.length
+   ?[{id:String(Date.now()),savedAt:new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}),customerId,cart},...rest].slice(0,10)
+   :rest;
+  // Keep only lots still present and clamp to available quantity
+  const validCart:Record<string,string>={};
+  for(const [lotId,qtyStr] of Object.entries(entry.cart)){
+   const lot=byId.get(lotId);
+   if(!lot)continue;
+   const q=BigInt(qtyStr),max=BigInt(lot.quantity);
+   if(q>0n&&max>0n)validCart[lotId]=(q>max?max:q).toString();
+  }
+  persistParked(nextParked);
+  setCart(validCart);
+  setCustomerId(customers.some(c=>c.id===entry.customerId)?entry.customerId:"");
+  setError("");
+  setInfo("Venta retomada desde pausa.");
+  scanRef.current?.focus();
  };
 
  const quickCashAmounts=useMemo(()=>{
@@ -272,7 +418,7 @@ export default function Cart({
        <input
         ref={scanRef}
         value={search}
-        onChange={e=>{setSearch(e.target.value);setSelected("");}}
+        onChange={e=>{setSearch(e.target.value);setSelected("");setInfo("");}}
         onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();choose();}}}
         placeholder="Escanear código EAN, PLU o buscar producto por nombre / SKU..."
        />
@@ -286,7 +432,7 @@ export default function Cart({
      <div className="om-pos-scan-bar">
       <label className="scanmode">
        <input type="checkbox" checked={fast} onChange={e=>{setFast(e.target.checked);scanRef.current?.focus();}}/>
-       <span>Escaneo rápido (agrega una unidad si hay un único lote coincidente)</span>
+       <span>Escaneo rápido (asigna lote por FEFO automáticamente)</span>
       </label>
       {weightPrefix&&(
        <span className="status AVAILABLE">
@@ -339,6 +485,12 @@ export default function Cart({
       <span>{error}</span>
      </p>
     )}
+    {info&&!error&&(
+     <p role="status" className="notice">
+      <Icon name="info" size={16}/>
+      <span>{info}</span>
+     </p>
+    )}
 
     <section className="om-card">
      <header className="om-card__head">
@@ -346,7 +498,7 @@ export default function Cart({
        <span className="om-card__icon"><Icon name="shoppingBag" size={16}/></span>
        <div>
         <h2>Nueva venta</h2>
-        <p>{rows.length} líneas · lote físico confirmado</p>
+        <p>{rows.length} líneas · asignación FEFO / lote confirmado</p>
        </div>
       </div>
       <span className="status AVAILABLE">Venta directa</span>
@@ -370,7 +522,7 @@ export default function Cart({
           <tr key={lot.id}>
            <td>
             <strong>{lot.name}</strong>
-            <small className="mono">{lot.code}</small>
+            <small className="mono">{lot.code}{lot.expiry?` · Vence ${lot.expiry}`:""}</small>
            </td>
            <td>
             {lot.unit==="UNIT"?(
@@ -438,6 +590,10 @@ export default function Cart({
       <button type="button" className="secondary" onClick={()=>quantityRef.current?.focus()}>
        F4 · Cantidad
       </button>
+      <button type="button" className="secondary" disabled={!rows.length} onClick={parkCurrentSale}>
+       <Icon name="clock" size={14}/>
+       <span>Pausar venta</span>
+      </button>
       <button
        type="button"
        className="secondary"
@@ -449,13 +605,58 @@ export default function Cart({
      </div>
     </section>
 
+    {parked.length>0&&(
+     <section className="om-card">
+      <header className="om-card__head">
+       <div className="om-card__heading">
+        <span className="om-card__icon"><Icon name="clock" size={16}/></span>
+        <div>
+         <h2>Ventas en pausa ({parked.length})</h2>
+         <p>Tickets retenidos temporalmente en esta caja</p>
+        </div>
+       </div>
+      </header>
+      <div className="om-card__body--pad">
+       {parked.map(entry=>{
+        const count=Object.keys(entry.cart).length;
+        const est=Object.entries(entry.cart).reduce((sum,[id,q])=>{
+         const l=byId.get(id);
+         return l?sum+(BigInt(l.price)*BigInt(q)+500n)/1000n:sum;
+        },0n);
+        const cust=customers.find(c=>c.id===entry.customerId);
+        return (
+         <div className="om-record-row" key={entry.id}>
+          <div>
+           <strong>{cust?cust.name:"Consumidor final"} · {count} líneas</strong>
+           <small className="mono">Pausada {entry.savedAt} · Est. {money(est)}</small>
+          </div>
+          <div className="om-row-actions">
+           <button type="button" className="secondary" onClick={()=>resumeParkedSale(entry)}>
+            Retomar
+           </button>
+           <button
+            type="button"
+            className="secondary"
+            aria-label="Descartar venta en pausa"
+            onClick={()=>persistParked(parked.filter(p=>p.id!==entry.id))}
+           >
+            <Icon name="trash" size={14}/>
+           </button>
+          </div>
+         </div>
+        );
+       })}
+      </div>
+     </section>
+    )}
+
     <section className="om-card">
      <header className="om-card__head">
       <div className="om-card__heading">
        <span className="om-card__icon"><Icon name="grid" size={16}/></span>
        <div>
         <h2>Accesos rápidos</h2>
-        <p>Artículos disponibles en esta sucursal</p>
+        <p>Productos fijados y artículos disponibles en esta sucursal</p>
        </div>
       </div>
      </header>
@@ -477,7 +678,7 @@ export default function Cart({
       <div className="v2-quicktiles">
        {quick.map(l=>(
         <button className="om-pos-tile" key={l.productId} type="button" onClick={()=>selectQuick(l)}>
-         <strong>{l.name}</strong>
+         <strong>{l.quickAccess?"★ ":""}{l.name}</strong>
          <div className="om-pos-tile__foot">
           <span>{money(BigInt(l.price))}</span>
           <span className="om-pos-tile__unit">{l.unit==="KG"?"kg":"u."}</span>
@@ -501,6 +702,16 @@ export default function Cart({
        {customers.map(c=><option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
       </select>
      </label>
+     {customerId&&(()=>{
+      const selectedCust=customers.find(c=>c.id===customerId);
+      const pts=BigInt(selectedCust?.availablePoints??"0");
+      const val=BigInt(pointValueCents||"0");
+      return selectedCust?(
+       <small className="mono" style={{display:"block",marginTop:-4}}>
+        Puntos disponibles: <strong>{String(pts)}</strong>{val>0n?` (${money(pts*val)})`:""}
+       </small>
+      ):null;
+     })()}
 
      <input type="hidden" name="requestKey" value={requestKey}/>
      <input type="hidden" name="lines" value={JSON.stringify(rows.map(r=>({lotId:r.lot.id,quantity:fixed(r.n,3)})))}/>

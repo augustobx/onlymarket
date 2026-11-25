@@ -7,6 +7,9 @@ import {transformLot} from "../src/server/transform.mjs";
 import {openShift,recordSale,closeShift,recordCashMovement,cancelSale} from "../src/server/sales.mjs";
 import {lotOperation} from "../src/server/lot-operations.mjs";
 import {recordFinance} from "../src/server/finance.mjs";
+import {reviewLot as runLotReview} from "../src/server/lot-review.mjs";
+import {adminOperation} from "../src/server/admin.mjs";
+import {getCustomerPointsSummary,redeemPoints} from "../src/server/loyalty.mjs";
 import {localDay} from "../src/domain/parse.mjs";
 import {recordReturn} from "../src/server/returns.mjs";
 import {stockSnapshot,stockControl,setTarget} from "../src/server/stock-control.mjs";
@@ -225,5 +228,61 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
   await assert.rejects(transformLot(db,other,{branchId:s.branchId,sourceLotId:lot.id,requestKey:key(),inputMilli:"1000",outputs:[{quantityMilli:"1000",disposition:"WASTE",reason:"Cross"}]}));
   await assert.rejects(recordFinance(db,other,{requestKey:key(),date:today,amount:"10",supplierId:supplier.id,payment:"CASH"},"PAYMENT"));
   await closeShift(db,s,{shiftId:ptsShift.id,counted:"0"});
+
+  // Phase 1 commercial rules: quickAccess persistence, multi-lot 3x2 promotion, and partial combo excess pricing.
+  const multiProd=await db.product.create({data:{tenantId,sku:key(),name:"Fideos multi",unit:"UNIT",sector:"GROCERY",salePriceCents:10000n,quickAccess:true}});
+  assert.equal((await db.product.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:multiProd.id}}})).quickAccess,true);
+  const ml1=await receiveLot(db,s,{...receive,productId:multiProd.id,code:key(),requestKey:key(),invoiceRef:"ML-1",quantity:"2",cost:"80",expiresOn});
+  const ml2=await receiveLot(db,s,{...receive,productId:multiProd.id,code:key(),requestKey:key(),invoiceRef:"ML-2",quantity:"2",cost:"80",expiresOn});
+  await db.promotion.create({data:{tenantId,productId:multiProd.id,name:"3x2 multi DB",discountBps:0,buyUnits:3,payUnits:2,startsOn:new Date(today+"T00:00:00Z"),endsOn:new Date(expiresOn+"T00:00:00Z")}});
+  const phase1Shift=await openShift(db,s,{branchId:s.branchId,opening:"0"});
+  const multiSale=await recordSale(db,s,{shiftId:phase1Shift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"200",lines:[{lotId:ml1.lotId,quantity:"2"},{lotId:ml2.lotId,quantity:"1"}]});
+  assert.equal(multiSale.totalCents,20000n);
+  const multiLines=await db.saleLine.findMany({where:{tenantId,saleId:multiSale.id}});
+  assert.equal(multiLines.reduce((a,l)=>a+l.totalCents,0n),20000n);
+  assert.ok(multiLines.every(l=>l.promotionLabel==="3x2 multi DB"));
+
+  // Partial combo: 2x packaged (90 ea) + 1x packB (150 ea) with 1x+1x combo at 200 -> 200 + 90 = 290.
+  const partialLotA=await receiveLot(db,s,{...receive,productId:packaged.id,code:key(),requestKey:key(),invoiceRef:"PA-1",quantity:"2",cost:"80",expiresOn});
+  const partialLotB=await receiveLot(db,s,{...receive,productId:packB.id,code:key(),requestKey:key(),invoiceRef:"PB-1",quantity:"1",cost:"50",expiresOn});
+  const partialSale=await recordSale(db,s,{shiftId:phase1Shift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"290",lines:[{lotId:partialLotA.lotId,quantity:"2"},{lotId:partialLotB.lotId,quantity:"1"}]});
+  assert.equal(partialSale.totalCents,29000n);
+  await closeShift(db,s,{shiftId:phase1Shift.id,counted:"0"});
+
+  // Phase 2 checks: lot review authorization, requiredSector guard, and admin branch/password operations.
+  const reviewTarget=await receiveLot(db,s,{...receive,productId:packaged.id,code:key(),requestKey:key(),invoiceRef:"REV-1",quantity:"1",cost:"40",expiresOn});
+  const invUser=await db.user.create({data:{email:key()+"@example.invalid",passwordHash:"not-a-login"}});
+  await db.membership.create({data:{tenantId,userId:invUser.id,role:"INVENTORY"}});
+  const invScope={tenantId,actorUserId:invUser.id};
+  await runLotReview(db,s,{lotId:reviewTarget.lotId,decision:"BLOCKED",reason:"Bloqueo de prueba"});
+  await assert.rejects(runLotReview(db,invScope,{lotId:reviewTarget.lotId,decision:"AVAILABLE",reason:"Intento inventario"}),/propietario o encargado/i);
+  await assert.rejects(runLotReview(db,s,{lotId:pastLot.id,decision:"AVAILABLE",reason:"Vencido"}),/Lote vencido/i);
+  await assert.rejects(runLotReview(db,s,{lotId:reviewTarget.lotId,decision:"AVAILABLE",reason:"Sector errado",requiredSector:"PRODUCE"}),/sector/i);
+  const unblocked=await runLotReview(db,s,{lotId:reviewTarget.lotId,decision:"AVAILABLE",reason:"Rehabilitación válida",reviewDays:"3"});
+  assert.equal(unblocked.status,"AVAILABLE");
+
+  const extraBranch=await adminOperation(db,s,{kind:"BRANCH",name:"Sucursal Norte"});
+  await adminOperation(db,s,{kind:"RENAME_BRANCH",branchId:extraBranch.id,name:"Sucursal Norte 2"});
+  assert.equal((await db.branch.findUniqueOrThrow({where:{tenantId_id:{tenantId,id:extraBranch.id}}})).name,"Sucursal Norte 2");
+  const empEmail=`emp-${key().slice(0,8)}@example.invalid`;
+  const empMember=await adminOperation(db,s,{kind:"EMPLOYEE",email:empEmail,password:"PassInicial1234",role:"CASHIER"});
+  await adminOperation(db,s,{kind:"RESET_PASSWORD",userId:empMember.userId,password:"PassNueva567890"});
+
+  // Phase 3 checks: loyalty points redemption balance, idempotency, over-redemption rejection, and tenant isolation.
+  await db.tenant.update({where:{id:tenantId},data:{pointValueCents:1500n}});
+  const beforePts=await getCustomerPointsSummary(db,tenantId,member.id);
+  assert.equal(beforePts[0].earned,3n);
+  assert.equal(beforePts[0].available,3n);
+  const rk=key();
+  const redeemed=await redeemPoints(db,s,{customerId:member.id,points:"2",reason:"Voucher caja",requestKey:rk});
+  assert.equal(redeemed.points,2n);
+  assert.equal(redeemed.valueCents,3000n);
+  assert.equal((await redeemPoints(db,s,{customerId:member.id,points:"2",reason:"Voucher caja",requestKey:rk})).id,redeemed.id);
+  await assert.rejects(redeemPoints(db,s,{customerId:member.id,points:"1",reason:"Voucher caja",requestKey:rk}),/duplicada/i);
+  const afterPts=await getCustomerPointsSummary(db,tenantId,member.id);
+  assert.equal(afterPts[0].redeemed,2n);
+  assert.equal(afterPts[0].available,1n);
+  await assert.rejects(redeemPoints(db,s,{customerId:member.id,points:"2",reason:"Exceso",requestKey:key()}),/Puntos insuficientes/i);
+  await assert.rejects(redeemPoints(db,other,{customerId:member.id,points:"1",reason:"Cross-tenant",requestKey:key()}));
  }finally{await db.$disconnect();}
 });
