@@ -201,7 +201,7 @@ test("PostgreSQL: compra, desposte, venta, pérdidas, saldo, concurrencia y aisl
    await assert.rejects(recordSale(db,s,{shiftId:guardShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"100",lines:[{lotId:bad.id,quantity:"1"}]}),/no apto/i);
   }
   // Regression: expired license blocks sales and inventory operations.
-  const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const yesterday=localDay(new Date(Date.now()-86400000));
   await db.tenant.update({where:{id:tenantId},data:{licenseUntil:new Date(yesterday+"T00:00:00Z")}});
   await assert.rejects(recordSale(db,s,{shiftId:guardShift.id,requestKey:key(),payment:"TRANSFER",quotedTotal:"100",lines:[{lotId:guardReceipt.lotId,quantity:"1"}]}),/Sin permisos/);
   await assert.rejects(receiveLot(db,s,{...receive,code:key(),requestKey:key()}),/Sin permisos/);
