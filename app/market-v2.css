@@ -69,3 +69,5 @@ html[data-theme=light][data-market-palette=orange] :is(.market-v2,.market-termin
 .market-terminal .v2-poshead .brandmark{width:34px;height:34px;background:#c45321;box-shadow:none}
 .market-v2 .v2-chart-axis small{white-space:nowrap}
 }
+
+@media screen{.market-v2 details.v2-card{margin-bottom:14px}.market-v2 details.v2-card .metrics{margin:14px 0 0}.market-v2 .v2-stack .v2-card .v2-callout{margin:14px 0 0}.market-v2 .v2-stack .v2-card .v2-pad>label{max-width:480px}}
