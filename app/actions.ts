@@ -28,7 +28,7 @@ async function authorize(tx:Prisma.TransactionClient,s:Awaited<ReturnType<typeof
  if(!m?.user.active||!licenseActive(m.tenant,localDay())||!allowed.includes(m.role))throw new Error("Sin permisos");
 }
 export async function loginAction(f:FormData){
- const ok=await login(str(f,"email"),str(f,"password"),str(f,"slug"));
+ const ok=await login(str(f,"email"),str(f,"password"));
  redirect(ok?"/":"/login?error=1");
 }
 export async function logoutAction(){await logout();redirect("/login");}
