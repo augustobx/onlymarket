@@ -95,7 +95,7 @@ try {
   await page.getByLabel("Correo electrónico").fill(process.env.BOOTSTRAP_EMAIL);
   await page.getByLabel("Contraseña", { exact: true }).fill(process.env.BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
-  await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+  await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
   await visual("dashboard");
 
   // Verify host-only cookie is NOT shared with another tenant subdomain
@@ -475,7 +475,7 @@ try {
   const [loginResponse] = await Promise.all([post, page.getByRole("button", { name: "Ingresar", exact: true }).click()]);
   assert.ok(loginResponse.status() >= 200 && loginResponse.status() < 400, `Tenant 2 login HTTP ${loginResponse.status()}`);
   try {
-    await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+    await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
   } catch (error) {
     const cookie = (await page.context().cookies(secondBase)).find(c => c.name === "onlymarket_session");
     const sessionCount = await db.session.count({ where: { tenantId: second.id, userId: secondOwner.id } });
@@ -535,7 +535,7 @@ try {
   await reactivateRow.getByRole("button", { name: "Guardar licencia" }).click();
   await page.getByRole("status").filter({ hasText: "Licencia actualizada" }).waitFor();
   await page.goto("http://platform-smoke.localhost:3000/");
-  await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+  await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
 
   // Expired tenant blocks access with branded screen (and no login form)
   const expiredOwnerHash = await hashPassword("CI-expired-owner-password");

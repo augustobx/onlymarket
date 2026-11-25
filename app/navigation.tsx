@@ -57,7 +57,7 @@ export function WorkspaceFrame({
  };
 
  return (
-  <div className={`workspace${collapsed?" workspace--collapsed":""}`}>
+  <div className={`workspace market-v2${collapsed?" workspace--collapsed":""}`}>
    <aside className={collapsed?"collapsed":""}>
     <div className="aside-top">
      <Link className="brand" href={brandHref} title="OnlyMarket · NanoLabs">
