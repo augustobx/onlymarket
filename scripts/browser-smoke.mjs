@@ -190,6 +190,42 @@ try {
   await page.getByRole("status").waitFor();
   assert.equal(await db.product.count({ where: { tenantId: tenant.id, sku: "SMOKE-002" } }), 1);
 
+  // V2 workstations use the existing commercial actions with real persisted records.
+  const cheese = await db.product.findFirstOrThrow({where:{tenantId:tenant.id,sku:"SMOKE-002"}});
+  await page.goto(tenantBase + "/inventario?view=recepcion");
+  await page.getByRole("heading",{name:"Recibir mercadería",exact:true}).waitFor();
+  await page.getByLabel("Número de comprobante").fill("V2-SMOKE-RECEIPT");
+  await page.getByLabel("Total del comprobante ($)").fill("6000");
+  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await page.getByLabel("Lote 1",{exact:true}).fill("V2-SMOKE-CHEESE");
+  await page.getByLabel("Cantidad 1",{exact:true}).fill("2");
+  await page.getByLabel("Costo total 1",{exact:true}).fill("6000");
+  const expiry=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  await page.getByLabel("Vencimiento 1",{exact:true}).fill(expiry);
+  await visual("v2-recepcion");
+  await page.getByRole("button",{name:"Registrar compra completa"}).click();
+  await page.getByRole("status").waitFor();
+  const cheeseLot=await db.lot.findFirstOrThrow({where:{tenantId:tenant.id,code:"V2-SMOKE-CHEESE"}});
+  assert.equal(cheeseLot.quantityMilli,2000n);
+  assert.equal(cheeseLot.remainingCostCents,600000n);
+  await page.goto(tenantBase + "/transformaciones?view=nueva&sector=DELI");
+  await page.getByRole("heading",{name:"Mesa de fraccionamiento"}).waitFor();
+  await page.getByLabel("Lote de origen",{exact:true}).selectOption(cheeseLot.id);
+  await page.getByLabel("Peso a transformar (kg)").fill("1");
+  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await page.getByLabel("Motivo / detalle 1").fill("Porcionado de prueba");
+  await page.getByLabel("Peso kg 1").fill("1");
+  await visual("v2-produccion");
+  // Verify balance before submit. This workflow is persisted by the original transform action.
+  await page.getByRole("button",{name:"Confirmar transformación"}).click();
+  await page.getByRole("status").waitFor();
+  assert.equal(await db.transformation.count({where:{tenantId:tenant.id,sourceLotId:cheeseLot.id}}),1);
+  await page.goto(tenantBase+"/catalogo");
+  await visual("v2-catalogo");
+  await page.getByRole("row").filter({hasText:"Queso smoke"}).getByRole("button",{name:"Ver ficha ›"}).click();
+  await page.getByRole("dialog",{name:"Queso smoke"}).waitFor();
+  await visual("v2-ficha");
+  await page.getByRole("button",{name:"Cerrar ventana"}).click();
   await page.goto(tenantBase + "/administracion");
   await visual("administracion");
   await page.getByRole("button", { name: "+ Nueva sucursal", exact: true }).click();
