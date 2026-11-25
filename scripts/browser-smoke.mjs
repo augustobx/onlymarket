@@ -181,6 +181,7 @@ try {
   assert.equal(await db.product.count({ where: { tenantId: tenant.id, sku: "SMOKE-002" } }), 1);
 
   await page.goto(tenantBase + "/administracion");
+  await page.getByRole("button", { name: "+ Nueva sucursal", exact: true }).click();
   const branchForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Agregar sucursal", exact: true }) });
   await branchForm.getByLabel("Nombre").fill("Sucursal smoke");
   await branchForm.getByRole("button", { name: "Agregar sucursal" }).click();
@@ -199,6 +200,7 @@ try {
   assert.equal(counted.remainingCostCents, 150000n);
 
   await page.goto(tenantBase + "/reposicion");
+  await page.getByRole("button", { name: "Configurar objetivo de stock", exact: true }).click();
   const config = page.locator("form").filter({ has: page.getByRole("button", { name: "Guardar objetivo", exact: true }) });
   await config.getByLabel("Sucursal").selectOption(lot.branchId);
   await config.getByLabel("Producto").selectOption(lot.productId);
@@ -237,6 +239,7 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/promociones");
+  await page.getByRole("button", { name: "+ Nueva promoción", exact: true }).click();
   const promoForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear promoción", exact: true }) });
   await promoForm.getByLabel("Nombre", { exact: true }).fill("3x2 smoke");
   await promoForm.locator('select[name="productId"]').selectOption(lot.productId);
@@ -275,6 +278,7 @@ try {
   assert.equal((await httpGet("/superadmin", { host: `${slug}.localhost:3000` })).status, 404);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("4500");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
@@ -303,6 +307,7 @@ try {
   assert.equal(returned.returnedLot.quantityMilli, 1000n);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
@@ -318,6 +323,7 @@ try {
   assert.equal(await page.getByRole("link", { name: "Desposte y fraccionamiento", exact: true }).count(), 0);
 
   await page.goto(tenantBase + "/clientes");
+  await page.getByRole("button", { name: "+ Nuevo cliente", exact: true }).click();
   await page.getByLabel("Código de socio").fill("SOCIO-1");
   await page.getByLabel("Nombre", { exact: true }).fill("Socio smoke");
   await page.getByRole("button", { name: "Crear cliente" }).click();
@@ -338,6 +344,7 @@ try {
   await seedReceipt(weighed.id, "WEIGHT", "2", "1000");
 
   await page.goto(tenantBase + "/combos");
+  await page.getByRole("button", { name: "+ Nuevo combo", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Combo smoke");
   await page.getByLabel("Precio del combo ($)").fill("2500");
   await page.locator('select[name="product0"]').selectOption(lot.productId);
@@ -375,6 +382,7 @@ try {
   assert.match(await page.getByRole("row").filter({ hasText: "Socio smoke" }).innerText(), /39/);
 
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();

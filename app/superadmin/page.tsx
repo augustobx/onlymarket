@@ -127,7 +127,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                     <td>{t._count.branches}</td>
                     <td>{t._count.members}</td>
                     <td>{t._count.products}</td>
-                    <td><strong>{plans[t.plan]}</strong><small>{t.licenseUntil?.toISOString().slice(0,10).split("-").reverse().join("/")??"Sin vencimiento"}</small></td>
+                    <td><strong>{plans[t.plan as keyof typeof plans]??t.plan}</strong><small>{t.licenseUntil?.toISOString().slice(0,10).split("-").reverse().join("/")??"Sin vencimiento"}</small></td>
                     <td><Operation title={"Licencia · "+t.name} trigger="Editar licencia" variant="secondary" description="Los cambios de acceso tienen efecto en las sesiones del comercio.">
                       <form action={licenseAction} className="fields">
                         <input type="hidden" name="tenantId" value={t.id} />
