@@ -1,12 +1,89 @@
-import {Operation} from "../operations";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {localDay} from "../../src/domain/parse.mjs";
+import {Operation} from "../operations";
 import {Shell,Field,Notice,money} from "../ui";
+import {PageHeader,SectionCard,EmptyState} from "../components/retail-ui";
 import {comboAction} from "./actions";
+
 export const dynamic="force-dynamic";
+
 export default async function Page({searchParams}:{searchParams:Promise<{ok?:string;error?:string}>}){
- const s=await requireSession();if(!["OWNER","MANAGER"].includes(s.role))return <Shell title="Combos"><p>Sin permisos</p></Shell>;
- const [products,combos]=await Promise.all([db.product.findMany({where:{tenantId:s.tenantId,active:true,unit:"UNIT"},orderBy:{name:"asc"}}),db.combo.findMany({where:{tenantId:s.tenantId},orderBy:{startsOn:"desc"},take:500})]);
- const today=localDay();return <Shell title="Combos entre productos"><Notice query={await searchParams}/><div className="om-page-intro"><div><span className="om-kicker">Gestión comercial</span><h2>Combos de productos</h2><p>Ofertas de precio fijo entre productos.</p></div><Operation title="Nuevo combo" trigger="+ Nuevo combo" wide><p>Hasta ocho productos distintos vendidos por unidad. Precio fijo por grupo. Se aplica a grupos exactos del carrito, sin acumular con otras ofertas sobre esos artículos. Se elige un único tipo de combo por venta si mejora el ahorro. Los productos adicionales de otros tipos no impiden la oferta.</p><form action={comboAction} className="fields"><div className="formgrid"><Field label="Nombre"><input name="name" required maxLength={120}/></Field><Field label="Precio del combo ($)"><input name="price" required inputMode="decimal"/></Field><Field label="Desde"><input name="start" type="date" defaultValue={today} required/></Field><Field label="Hasta"><input name="end" type="date" defaultValue={today} required/></Field></div>{Array.from({length:8},(_,i)=><div className="formgrid" key={i}><Field label={"Producto "+(i+1)}><select name={"product"+i} required={i<2}><option value="">Elegir</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label={"Unidades "+(i+1)}><input name={"units"+i} type="number" min="1" max="99" defaultValue="1"/></Field></div>)}<button>Crear combo</button></form></Operation></div><section className="panel"><h2>Combos registrados</h2><div className="om-card-grid">{combos.map(c=><article className="om-list-card" key={c.id}><strong>{c.name} · {money(c.priceCents)}</strong><p>{(c.items as {productId:string;units:number}[]).map(i=>i.units+" × "+(products.find(p=>p.id===i.productId)?.name??"Producto inactivo")).join(" + ")} · {c.startsOn.toISOString().slice(0,10)} a {c.endsOn.toISOString().slice(0,10)} · {c.active?"Habilitado":"Desactivado"}</p>{c.active&&<form action={comboAction}><input type="hidden" name="id" value={c.id}/><button className="secondary">Desactivar combo</button></form>}</article>)}</div>{!combos.length&&<p className="empty">Todavía no hay combos registrados.</p>}</section></Shell>;
+ const s=await requireSession();
+ if(!["OWNER","MANAGER"].includes(s.role))return <Shell title="Combos"><p className="error">Sin permisos</p></Shell>;
+
+ const [products,combos]=await Promise.all([
+  db.product.findMany({where:{tenantId:s.tenantId,active:true,unit:"UNIT"},orderBy:{name:"asc"}}),
+  db.combo.findMany({where:{tenantId:s.tenantId},orderBy:{startsOn:"desc"},take:500}),
+ ]);
+ const today=localDay();
+
+ return (
+  <Shell title="Combos entre productos">
+   <Notice query={await searchParams}/>
+
+   <PageHeader
+    kicker="Comercial"
+    title="Combos de productos"
+    subtitle="Paquetes de precio fijo entre artículos vendidos por unidad."
+    actions={
+     <Operation
+      title="Nuevo combo"
+      trigger="+ Nuevo combo"
+      wide
+      description="Hasta ocho productos distintos por unidad. Se aplica en caja si supera las promociones individuales."
+     >
+      <form action={comboAction} className="fields">
+       <div className="formgrid">
+        <Field label="Nombre"><input name="name" required maxLength={120}/></Field>
+        <Field label="Precio del combo ($)"><input name="price" required inputMode="decimal"/></Field>
+        <Field label="Desde"><input name="start" type="date" defaultValue={today} required/></Field>
+        <Field label="Hasta"><input name="end" type="date" defaultValue={today} required/></Field>
+       </div>
+       {Array.from({length:8},(_,i)=>(
+        <div className="formgrid" key={i}>
+         <Field label={"Producto "+(i+1)}>
+          <select name={"product"+i} required={i<2}>
+           <option value="">Elegir</option>
+           {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+         </Field>
+         <Field label={"Unidades "+(i+1)}><input name={"units"+i} type="number" min="1" max="99" defaultValue="1"/></Field>
+        </div>
+       ))}
+       <button>Crear combo</button>
+      </form>
+     </Operation>
+    }
+   />
+
+   <SectionCard title="Combos registrados" subtitle="Ofertas combinadas activas e históricas" icon="sparkles" padded>
+    {combos.length>0?(
+     <div className="om-card-grid">
+      {combos.map(c=>(
+       <article className="om-list-card" key={c.id}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+         <strong>{c.name}</strong>
+         <span className={"status "+(c.active?"AVAILABLE":"EXHAUSTED")}>{c.active?"Habilitado":"Desactivado"}</span>
+        </div>
+        <strong className="mono" style={{fontSize:18}}>{money(c.priceCents)}</strong>
+        <p style={{margin:0,fontSize:12.5}}>
+         {(c.items as {productId:string;units:number}[]).map(i=>i.units+" × "+(products.find(p=>p.id===i.productId)?.name??"Producto inactivo")).join(" + ")}
+        </p>
+        <small className="mono">{c.startsOn.toISOString().slice(0,10)} a {c.endsOn.toISOString().slice(0,10)}</small>
+        {c.active&&(
+         <form action={comboAction}>
+          <input type="hidden" name="id" value={c.id}/>
+          <button className="secondary">Desactivar combo</button>
+         </form>
+        )}
+       </article>
+      ))}
+     </div>
+    ):(
+     <EmptyState icon="sparkles" title="Sin combos registrados" description="Combiná productos por unidad con un precio promocional cerrado."/>
+    )}
+   </SectionCard>
+  </Shell>
+ );
 }

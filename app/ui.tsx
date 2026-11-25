@@ -1,56 +1,82 @@
 import Link from "next/link";
+import type {ReactNode} from "react";
 import {requireSession} from "../src/server/auth";
 import {logoutAction} from "./actions";
-import type {ReactNode} from "react";
 import {showTransform,profiles} from "../src/domain/settings.mjs";
 import {resolveOkMessage} from "../src/domain/notices.mjs";
 import {WorkspaceFrame} from "./navigation";
 import {PaletteSelector,DarkModeToggle} from "./theme/ThemeControls";
+import {Icon,type IconName} from "./components/icons";
+import {ToastTrigger} from "./components/toast";
 
 export const sectors={BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",GROCERY:"Almacén",OTHER:"Otros"};
 export const states:Record<string,string>={AVAILABLE:"Disponible",EXPIRING:"Próximo a vencer",REVIEW:"Revisar calidad",BLOCKED:"Bloqueado",EXHAUSTED:"Agotado"};
-const roles={OWNER:"Propietario",MANAGER:"Encargado",INVENTORY:"Inventario",CASHIER:"Cajero"};
+const roles:Record<string,string>={OWNER:"Propietario",MANAGER:"Encargado",INVENTORY:"Inventario",CASHIER:"Cajero"};
 
-export function fixed(n:bigint,scale:number){const sign=n<0n?"-":"";const a=(n<0n?-n:n).toString().padStart(scale+1,"0");return sign+a.slice(0,-scale)+","+a.slice(-scale);}
+export function fixed(n:bigint,scale:number){
+ const sign=n<0n?"-":"";
+ const a=(n<0n?-n:n).toString().padStart(scale+1,"0");
+ return sign+a.slice(0,-scale)+","+a.slice(-scale);
+}
 export function money(n:bigint){return "$ "+fixed(n,2);}
-export function amount(n:bigint,unit:string){return unit==="UNIT"&&n%1000n===0n?(n/1000n).toString()+" u.":fixed(n,3)+(unit==="KG"?" kg":" u.");}
+export function amount(n:bigint,unit:string){
+ return unit==="UNIT"&&n%1000n===0n?(n/1000n).toString()+" u.":fixed(n,3)+(unit==="KG"?" kg":" u.");
+}
 
-export async function Shell({title,children,allowCashier=false}:{title:string;children?:ReactNode;allowCashier?:boolean}){
- const s=await requireSession(),manager=["OWNER","MANAGER"].includes(s.role);
- const groups=[
+export async function Shell({
+ title,
+ children,
+ allowCashier=false,
+}:{
+ title:string;
+ children?:ReactNode;
+ allowCashier?:boolean;
+}){
+ const s=await requireSession();
+ const manager=["OWNER","MANAGER"].includes(s.role);
+
+ const groups:{name:string;items:{href:string;label:string;icon:IconName}[]}[]=[
   {name:"Operación",items:[
-   ...(s.role!=="CASHIER"?[{href:"/",label:"Resumen",icon:"home"},{href:"/alertas",label:"Alertas",icon:"bell"}]:[]),
-   ...(s.role!=="INVENTORY"?[{href:"/pos",label:"Terminal de caja",icon:"cart"}]:[])
+   ...(s.role!=="CASHIER"?[{href:"/",label:"Resumen",icon:"home" as IconName},{href:"/alertas",label:"Alertas",icon:"bell" as IconName}]:[]),
+   ...(s.role!=="INVENTORY"?[{href:"/pos",label:"Terminal de caja",icon:"cart" as IconName}]:[]),
   ]},
   ...(s.role!=="CASHIER"?[{name:"Mercadería",items:[
-   {href:"/catalogo",label:"Productos e inventario",icon:"box"},
-   {href:"/inventario",label:"Compras y recepción",icon:"truck"},
-   {href:"/stock",label:"Conteos y traslados",icon:"trace"},
-   {href:"/reposicion",label:"Reposición",icon:"truck"},
-   
-   {href:"/proveedores",label:"Proveedores",icon:"truck"},
-
-   {href:"/trazabilidad",label:"Trazabilidad",icon:"trace"}
+   {href:"/catalogo",label:"Productos e inventario",icon:"box" as IconName},
+   {href:"/inventario",label:"Compras y recepción",icon:"truck" as IconName},
+   {href:"/stock",label:"Conteos y traslados",icon:"layers" as IconName},
+   {href:"/reposicion",label:"Reposición",icon:"packageCheck" as IconName},
+   {href:"/proveedores",label:"Proveedores",icon:"building" as IconName},
+   {href:"/trazabilidad",label:"Trazabilidad",icon:"trace" as IconName},
   ]}]:[]),
-  ...(s.role!=="CASHIER"&&showTransform(s.profile)?[{name:"Producción",items:[{href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale"}]}]:[]),
-  ...(manager?[{name:"Administración comercial",items:[
-   {href:"/promociones",label:"Promociones",icon:"tag"},
-   {href:"/combos",label:"Combos",icon:"tag"},
-   {href:"/clientes",label:"Clientes y fidelización",icon:"grid"},
-   {href:"/ventas",label:"Ventas y anulaciones",icon:"receipt"},
-   {href:"/finanzas",label:"Finanzas",icon:"wallet"},
-   {href:"/informes",label:"Informes",icon:"chart"}
+  ...(s.role!=="CASHIER"&&showTransform(s.profile)?[{name:"Producción y frescos",items:[
+   {href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale" as IconName},
   ]}]:[]),
-  ...(s.role==="OWNER"?[{name:"Configuración",items:[
-   {href:"/administracion",label:"Administración",icon:"settings"},
-   {href:"/configuracion",label:"Perfil del comercio",icon:"settings"}
-  ]}]:[])
+  ...(manager?[{name:"Comercial",items:[
+   {href:"/promociones",label:"Promociones",icon:"tag" as IconName},
+   {href:"/combos",label:"Combos",icon:"sparkles" as IconName},
+   {href:"/clientes",label:"Clientes y socios",icon:"users" as IconName},
+   {href:"/ventas",label:"Ventas y anulaciones",icon:"receipt" as IconName},
+   {href:"/finanzas",label:"Finanzas",icon:"wallet" as IconName},
+   {href:"/informes",label:"Informes",icon:"chart" as IconName},
+  ]}]:[]),
+  ...(s.role==="OWNER"?[{name:"Administración",items:[
+   {href:"/administracion",label:"Sucursales y equipo",icon:"shield" as IconName},
+   {href:"/configuracion",label:"Perfil del comercio",icon:"settings" as IconName},
+  ]}]:[]),
  ];
 
  const footer=(
   <>
-   <Link href="/cuenta" className="footer-link">Mi cuenta</Link>
-   <form action={logoutAction}><button className="secondary">Cerrar sesión</button></form>
+   <Link href="/cuenta" className="footer-link">
+    <Icon name="user" size={15}/>
+    <span>Mi cuenta</span>
+   </Link>
+   <form action={logoutAction}>
+    <button className="secondary">
+     <Icon name="logOut" size={15}/>
+     <span>Cerrar sesión</span>
+    </button>
+   </form>
    <small>OnlyMarket · NanoLabs</small>
   </>
  );
@@ -58,16 +84,26 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
  const header=(
   <header className="topbar">
    <div className="topbar-title">
-    <div className="v2-crumb"><span>Administración / </span><strong>{title}</strong></div>
+    <div className="v2-crumb">
+     <span>Gestión comercial</span>
+     <span>/</span>
+     <strong>{title}</strong>
+    </div>
    </div>
    <div className="topbar-actions">
-    {s.role!=="INVENTORY"&&<Link href="/pos" className="om-top-pos" aria-label="Abrir punto de venta"><span aria-hidden="true">↗</span> Ir a caja</Link>}
+    {s.role!=="INVENTORY"&&(
+     <Link href="/pos" className="om-top-pos" aria-label="Abrir punto de venta">
+      <Icon name="cart" size={15}/>
+      <span>Ir a caja</span>
+      <Icon name="arrowUpRight" size={14}/>
+     </Link>
+    )}
     <PaletteSelector/>
     <DarkModeToggle/>
     <Link href="/cuenta" className="userchip" title="Mi cuenta">
      <span className="avatar">{s.email.slice(0,1).toUpperCase()}</span>
      <div>
-      <strong>{roles[s.role]}</strong>
+      <strong>{roles[s.role]??s.role}</strong>
       <small>{s.email}</small>
      </div>
     </Link>
@@ -79,19 +115,48 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
   <WorkspaceFrame
    brandHref={s.role==="CASHIER"?"/pos":"/"}
    tenantName={s.tenantName}
-   roleMeta={`${roles[s.role]} · ${profiles[s.profile as keyof typeof profiles]} · ${s.plan}`}
+   roleMeta={`${roles[s.role]??s.role} · ${profiles[s.profile as keyof typeof profiles]} · ${s.plan}`}
    groups={groups}
    footer={footer}
    header={header}
   >
-   {s.role==="CASHIER"&&!allowCashier?<p className="notice"><Link href="/pos">Ir al punto de venta</Link></p>:<>{title!=="Resumen operativo"&&title!=="Catálogo de productos"&&title!=="Inventario y lotes"&&title!=="Desposte y fraccionamiento"&&<h1 className="v2-module-title">{title}</h1>}{children}</>}
+   {s.role==="CASHIER"&&!allowCashier?(
+    <p className="notice">
+     <Link href="/pos">Ir al punto de venta</Link>
+    </p>
+   ):children}
   </WorkspaceFrame>
  );
 }
 
-export function Notice({query}:{query:{error?:string;ok?:string}}){
+export function Notice({query,action}:{query:{error?:string;ok?:string};action?:ReactNode}){
  const okMessage=resolveOkMessage(query.ok);
- return query.error?<p className="error" role="alert">{query.error}</p>:okMessage?<p className="success" role="status">{okMessage}</p>:null;
+ if(query.error){
+  return (
+   <>
+    <ToastTrigger tone="error" message={query.error}/>
+    <p className="error" role="alert">
+     <Icon name="alert" size={16}/>
+     <span>{query.error}</span>
+    </p>
+   </>
+  );
+ }
+ if(okMessage){
+  return (
+   <>
+    <ToastTrigger tone="success" message={okMessage}/>
+    <p className="success" role="status">
+     <Icon name="check" size={16}/>
+     <span>{okMessage}</span>
+     {action&&<span style={{marginLeft:"auto"}}>{action}</span>}
+    </p>
+   </>
+  );
+ }
+ return null;
 }
 
-export function Field({label,children}:{label:string;children:ReactNode}){return <label>{label}{children}</label>;}
+export function Field({label,children}:{label:string;children:ReactNode}){
+ return <label>{label}{children}</label>;
+}

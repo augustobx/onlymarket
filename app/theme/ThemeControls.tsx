@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "../components/icons";
 import { PALETTES } from "./palettes";
 import { useNanoLabsTheme } from "./ThemeProvider";
 
@@ -14,8 +15,15 @@ export function PaletteSelector() {
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
@@ -25,16 +33,17 @@ export function PaletteSelector() {
         className="nl-iconbtn"
         aria-label="Selector de paleta"
         aria-expanded={open}
-        title="Elegir paleta de color"
+        title="Elegir paleta corporativa"
         onClick={() => setOpen((v) => !v)}
       >
         <span className="nl-swatch" style={{ background: palette.gradient }} />
         <span className="nl-palette-label">{palette.badge}</span>
+        <Icon name="chevronDown" size={13} />
       </button>
       {open && (
         <div className="nl-palette-menu" role="menu">
           <div className="nl-palette-head">
-            <strong>Paleta NanoLabs</strong>
+            <strong>Paleta corporativa</strong>
           </div>
           {Object.values(PALETTES).map((p) => (
             <button
@@ -50,7 +59,11 @@ export function PaletteSelector() {
             >
               <span className="nl-swatch" style={{ background: p.gradient }} />
               <span>{p.name}</span>
-              {p.id === palette.id && <span className="nl-check">✓</span>}
+              {p.id === palette.id && (
+                <span className="nl-check">
+                  <Icon name="check" size={14} />
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -64,21 +77,12 @@ export function DarkModeToggle() {
   return (
     <button
       type="button"
-      className="nl-iconbtn"
+      className="nl-iconbtn nl-iconbtn--square"
       onClick={toggleDark}
       aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       title={isDark ? "Modo claro" : "Modo oscuro"}
     >
-      {isDark ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-        </svg>
-      ) : (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
-          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-        </svg>
-      )}
+      <Icon name={isDark ? "sun" : "moon"} size={16} />
     </button>
   );
 }

@@ -21,8 +21,8 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtle: "#FFAD75",
     subtlest: "#FFF4EA",
     darkSubtlest: "#381A05",
-    gradient: "linear-gradient(135deg, #FF8A2B, #E25700)",
-    glow: "rgba(226, 87, 0, 0.30)",
+    gradient: "linear-gradient(135deg, #FF7D26, #E25700)",
+    glow: "rgba(255, 102, 0, 0.28)",
   },
   blue: {
     id: "blue",
@@ -34,7 +34,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#EFF6FF",
     darkSubtlest: "#0F2347",
     gradient: "linear-gradient(135deg, #3B82F6, #1D4ED8)",
-    glow: "rgba(37, 99, 235, 0.30)",
+    glow: "rgba(37, 99, 235, 0.28)",
   },
   emerald: {
     id: "emerald",
@@ -46,7 +46,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#ECFDF5",
     darkSubtlest: "#062E20",
     gradient: "linear-gradient(135deg, #10B981, #047857)",
-    glow: "rgba(5, 150, 105, 0.30)",
+    glow: "rgba(5, 150, 105, 0.28)",
   },
   purple: {
     id: "purple",
@@ -58,7 +58,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#F5F3FF",
     darkSubtlest: "#2B124C",
     gradient: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
-    glow: "rgba(124, 58, 237, 0.30)",
+    glow: "rgba(124, 58, 237, 0.28)",
   },
   crimson: {
     id: "crimson",
@@ -70,7 +70,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#FEF2F2",
     darkSubtlest: "#3B0F0F",
     gradient: "linear-gradient(135deg, #EF4444, #B91C1C)",
-    glow: "rgba(220, 38, 38, 0.30)",
+    glow: "rgba(220, 38, 38, 0.28)",
   },
   amber: {
     id: "amber",
@@ -82,7 +82,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#FFFBEB",
     darkSubtlest: "#3D2405",
     gradient: "linear-gradient(135deg, #F59E0B, #B45309)",
-    glow: "rgba(217, 119, 6, 0.30)",
+    glow: "rgba(217, 119, 6, 0.28)",
   },
   slate: {
     id: "slate",
@@ -94,7 +94,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     subtlest: "#F1F5F9",
     darkSubtlest: "#1E293B",
     gradient: "linear-gradient(135deg, #64748B, #334155)",
-    glow: "rgba(71, 85, 105, 0.30)",
+    glow: "rgba(71, 85, 105, 0.28)",
   },
 };
 

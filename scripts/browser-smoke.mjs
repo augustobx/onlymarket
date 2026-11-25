@@ -59,7 +59,7 @@ try {
         await page.waitForFunction(() => getComputedStyle(document.querySelector(".bh2-tarjeta")).opacity === "1");
       }
       await page.screenshot({ path: join(process.env.SMOKE_ARTIFACT_DIR, `${label}-${mode}.png`), fullPage: true });
-      const overflow = await page.evaluate(() => ({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("body *")].filter(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1&&r.width>0&&!e.closest(".tablewrap,.v2-tabs,.v2-chart-bars");}).slice(0,12).map(e=>({tag:e.tagName,cls:String(e.className).slice(0,120),right:Math.round(e.getBoundingClientRect().right)}))}));
+      const overflow = await page.evaluate(() => ({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("body *")].filter(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1&&r.width>0&&!e.closest(".tablewrap,.v2-tabs,.om-chart__bars");}).slice(0,12).map(e=>({tag:e.tagName,cls:String(e.className).slice(0,120),right:Math.round(e.getBoundingClientRect().right)}))}));
       assert.ok(overflow.scroll <= width + 1, `${label}: ${mode} overflow ${JSON.stringify(overflow)}`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -140,7 +140,6 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   await visual("pos");
-  await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").uncheck();
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
@@ -303,7 +302,6 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/pos");
-  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   const scanner = page.getByLabel("Buscar / escanear código");
   for (let i = 0; i < 3; i++) {
@@ -416,7 +414,6 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   const comboScan = page.getByLabel("Buscar / escanear código");
-  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   for (const code of ["COMBO-A", "COMBO-B"]) {
     await comboScan.fill(code);

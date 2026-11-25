@@ -3,17 +3,191 @@ import {useState} from "react";
 import {useFormStatus} from "react-dom";
 import {decimal} from "../../src/domain/parse.mjs";
 import {purchaseAction} from "./actions";
+import {SectionCard,InfoCallout} from "../components/retail-ui";
+import {Icon} from "../components/icons";
+
 type Option={id:string;name:string};
 type Product=Option&{unit:string;sector:string};
 type Line={productId:string;code:string;quantity:string;cost:string;expiresOn:string};
+
 const blank=():Line=>({productId:"",code:"",quantity:"",cost:"",expiresOn:""});
 const fmt=(n:bigint)=>{const a=n.toString().padStart(3,"0");return a.slice(0,-2)+","+a.slice(-2);};
-function Submit({valid}:{valid:boolean}){const {pending}=useFormStatus();return <button disabled={!valid||pending}>{pending?"Registrando...":"Registrar compra completa"}</button>}
-export default function Purchase({products,suppliers,branches,today,requestKey}:{products:Product[];suppliers:Option[];branches:Option[];today:string;requestKey:string}){
- const [lines,setLines]=useState<Line[]>([blank()]),[total,setTotal]=useState("");
+
+function Submit({valid}:{valid:boolean}){
+ const {pending}=useFormStatus();
+ return (
+  <button disabled={!valid||pending}>
+   <Icon name="check" size={16}/>
+   <span>{pending?"Registrando compra...":"Registrar compra completa"}</span>
+  </button>
+ );
+}
+
+export default function Purchase({
+ products,
+ suppliers,
+ branches,
+ today,
+ requestKey,
+}:{
+ products:Product[];
+ suppliers:Option[];
+ branches:Option[];
+ today:string;
+ requestKey:string;
+}){
+ const [lines,setLines]=useState<Line[]>([blank()]);
+ const [total,setTotal]=useState("");
  const set=(i:number,k:keyof Line,v:string)=>setLines(old=>old.map((l,j)=>i===j?{...l,[k]:v}:l));
- let sum=0n,valid=false,invoice:bigint|null=null;
+
+ let sum=0n;
+ let valid=false;
+ let invoice:bigint|null=null;
  for(const l of lines){try{sum+=decimal(l.cost,2,"Costo",{allowZero:true});}catch{}}
- try{invoice=decimal(total,2,"Total",{allowZero:true});valid=invoice===sum&&lines.every(l=>{const p=products.find(p=>p.id===l.productId);const qty=decimal(l.quantity,3,"Cantidad");decimal(l.cost,2,"Costo",{allowZero:true});return !!p&&!!l.code.trim()&&(p.unit!=="UNIT"||qty%1000n===0n)&&(!["DELI","BUTCHERY"].includes(p.sector)||!!l.expiresOn)&&(!l.expiresOn||l.expiresOn>today);});}catch{}
- return <form action={purchaseAction} className="v2-station-form"><input type="hidden" name="requestKey" value={requestKey}/><input type="hidden" name="lines" value={JSON.stringify(lines)}/><div className="v2-steps"><b>1 · Comprobante</b><span>›</span><b>2 · Mercadería</b><span>›</span><span>3 · Confirmación</span></div><div className="v2-station-grid"><div className="v2-stack"><section className="v2-card"><header className="v2-cardhead"><div><h2>Datos del comprobante</h2><p>Identificación del ingreso</p></div></header><div className="v2-pad v2-fields"><label>Proveedor<select name="supplierId">{suppliers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Sucursal<select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Número de comprobante<input name="invoiceRef" required maxLength={100}/></label><label>Total del comprobante ($)<input name="total" required inputMode="decimal" value={total} onChange={e=>setTotal(e.target.value)}/></label></div></section><section className="v2-card"><header className="v2-cardhead"><div><h2>Detalle de mercadería</h2><p>Cada renglón representa un lote físico</p></div></header><div className="tablewrap"><table className="v2-entry-table"><thead><tr><th>Producto</th><th>Lote</th><th>Cantidad</th><th>Costo total del lote ($)</th><th>Vencimiento</th><th></th></tr></thead><tbody>{lines.map((l,i)=>{const p=products.find(p=>p.id===l.productId);return <tr key={i}><td><select aria-label={"Producto "+(i+1)} value={l.productId} required onChange={e=>set(i,"productId",e.target.value)}><option value="">Elegir producto</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} ({p.unit==="KG"?"kg":"u."})</option>)}</select></td><td><input aria-label={"Lote "+(i+1)} value={l.code} required onChange={e=>set(i,"code",e.target.value)}/></td><td><input aria-label={"Cantidad "+(i+1)} value={l.quantity} required inputMode="decimal" onChange={e=>set(i,"quantity",e.target.value)}/></td><td><input aria-label={"Costo total "+(i+1)} value={l.cost} required inputMode="decimal" onChange={e=>set(i,"cost",e.target.value)}/></td><td><input aria-label={"Vencimiento "+(i+1)} type="date" value={l.expiresOn} min={new Date(Date.parse(today+"T00:00:00Z")+86400000).toISOString().slice(0,10)} required={p?.sector==="DELI"||p?.sector==="BUTCHERY"} onChange={e=>set(i,"expiresOn",e.target.value)}/></td><td><button type="button" className="secondary" disabled={lines.length===1} onClick={()=>setLines(old=>old.filter((_,j)=>j!==i))} aria-label={"Quitar lote "+(i+1)}>×</button></td></tr>})}</tbody></table></div><div className="v2-pad"><button type="button" className="secondary" disabled={lines.length>=50} onClick={()=>setLines(old=>[...old,blank()])}>+ Agregar renglón</button></div></section></div><aside className="v2-station-aside"><section className="v2-card v2-pad"><h2>Control de recepción</h2>{[["Renglones",lines.length],["Total de lotes","$ "+fmt(sum)],["Comprobante",invoice===null?"—":"$ "+fmt(invoice)],["Diferencia",invoice===null?"—":"$ "+(invoice-sum<0n?"−":"")+fmt(invoice-sum<0n?sum-invoice:invoice-sum)]].map(([k,v])=><div key={k} className="v2-totalline"><span>{k}</span><strong>{v}</strong></div>)}<p className="v2-pad"><span className={"status "+(valid?"AVAILABLE":"REVIEW")}>{valid?"Listo para registrar":"Revisar datos e importes"}</span></p><p className="v2-callout">Comprobá cantidades, costos y vencimientos. El importe de cada renglón corresponde al costo total del lote, no al costo unitario.</p><Submit valid={valid}/><small>Registra mercadería real. El servidor valida el comprobante y los lotes.</small></section></aside></div></form>;
+ try{
+  invoice=decimal(total,2,"Total",{allowZero:true});
+  valid=invoice===sum&&lines.every(l=>{
+   const p=products.find(p=>p.id===l.productId);
+   const qty=decimal(l.quantity,3,"Cantidad");
+   decimal(l.cost,2,"Costo",{allowZero:true});
+   return !!p&&!!l.code.trim()&&(p.unit!=="UNIT"||qty%1000n===0n)&&(!["DELI","BUTCHERY"].includes(p.sector)||!!l.expiresOn)&&(!l.expiresOn||l.expiresOn>today);
+  });
+ }catch{}
+
+ const diff=invoice===null?null:invoice-sum;
+
+ return (
+  <form action={purchaseAction} className="v2-station-form">
+   <input type="hidden" name="requestKey" value={requestKey}/>
+   <input type="hidden" name="lines" value={JSON.stringify(lines)}/>
+
+   <div className="v2-steps">
+    <b>1 · Comprobante</b>
+    <span>›</span>
+    <b>2 · Mercadería</b>
+    <span>›</span>
+    <span>3 · Confirmación y balance</span>
+   </div>
+
+   <div className="v2-station-grid">
+    <div className="v2-stack">
+     <SectionCard title="Datos del comprobante" subtitle="Identificación de factura o remito" icon="receipt" padded>
+      <div className="v2-fields">
+       <label>
+        Proveedor
+        <select name="supplierId">{suppliers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+       </label>
+       <label>
+        Sucursal
+        <select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+       </label>
+       <label>
+        Número de comprobante
+        <input name="invoiceRef" required maxLength={100} placeholder="Ej. FC-A 0001-00012345"/>
+       </label>
+       <label>
+        Total del comprobante ($)
+        <input name="total" required inputMode="decimal" value={total} onChange={e=>setTotal(e.target.value)} placeholder="0,00"/>
+       </label>
+      </div>
+     </SectionCard>
+
+     <SectionCard
+      title="Detalle de mercadería"
+      subtitle="Cada renglón genera un lote físico trazable"
+      icon="truck"
+      actions={
+       <button type="button" className="secondary" disabled={lines.length>=50} onClick={()=>setLines(old=>[...old,blank()])}>
+        <Icon name="plus" size={15}/>
+        <span>Agregar renglón</span>
+       </button>
+      }
+     >
+      <div className="tablewrap">
+       <table className="v2-entry-table">
+        <thead>
+         <tr>
+          <th>Producto</th>
+          <th>Lote</th>
+          <th>Cantidad</th>
+          <th>Costo total del lote ($)</th>
+          <th>Vencimiento</th>
+          <th></th>
+         </tr>
+        </thead>
+        <tbody>
+         {lines.map((l,i)=>{
+          const p=products.find(p=>p.id===l.productId);
+          return (
+           <tr key={i}>
+            <td>
+             <select aria-label={"Producto "+(i+1)} value={l.productId} required onChange={e=>set(i,"productId",e.target.value)}>
+              <option value="">Elegir producto</option>
+              {products.map(p=><option key={p.id} value={p.id}>{p.name} ({p.unit==="KG"?"kg":"u."})</option>)}
+             </select>
+            </td>
+            <td><input aria-label={"Lote "+(i+1)} value={l.code} required onChange={e=>set(i,"code",e.target.value)}/></td>
+            <td><input aria-label={"Cantidad "+(i+1)} value={l.quantity} required inputMode="decimal" onChange={e=>set(i,"quantity",e.target.value)}/></td>
+            <td><input aria-label={"Costo total "+(i+1)} value={l.cost} required inputMode="decimal" onChange={e=>set(i,"cost",e.target.value)}/></td>
+            <td>
+             <input
+              aria-label={"Vencimiento "+(i+1)}
+              type="date"
+              value={l.expiresOn}
+              min={new Date(Date.parse(today+"T00:00:00Z")+86400000).toISOString().slice(0,10)}
+              required={p?.sector==="DELI"||p?.sector==="BUTCHERY"}
+              onChange={e=>set(i,"expiresOn",e.target.value)}
+             />
+            </td>
+            <td>
+             <button
+              type="button"
+              className="secondary"
+              disabled={lines.length===1}
+              onClick={()=>setLines(old=>old.filter((_,j)=>j!==i))}
+              aria-label={"Quitar lote "+(i+1)}
+             >
+              <Icon name="trash" size={14}/>
+             </button>
+            </td>
+           </tr>
+          );
+         })}
+        </tbody>
+       </table>
+      </div>
+     </SectionCard>
+    </div>
+
+    <aside className="v2-station-aside">
+     <SectionCard title="Control de recepción" subtitle="Balance contra comprobante" icon="packageCheck" padded>
+      {[
+       ["Renglones",lines.length],
+       ["Total de lotes","$ "+fmt(sum)],
+       ["Comprobante",invoice===null?"—":"$ "+fmt(invoice)],
+       ["Diferencia",diff===null?"—":"$ "+(diff<0n?"−":"")+fmt(diff<0n?-diff:diff)],
+      ].map(([k,v])=>(
+       <div key={String(k)} className="v2-totalline">
+        <span>{k}</span>
+        <strong>{v}</strong>
+       </div>
+      ))}
+
+      <div style={{margin:"14px 0"}}>
+       <span className={"status "+(valid?"AVAILABLE":"REVIEW")}>
+        {valid?"Listo para registrar":"Revisar datos e importes"}
+       </span>
+      </div>
+
+      <InfoCallout icon="info" tone="warning">
+       El importe de cada renglón corresponde al <strong>costo total del lote</strong>, no al costo unitario.
+      </InfoCallout>
+
+      <Submit valid={valid}/>
+      <small style={{display:"block",marginTop:8}}>El servidor valida vencimientos y suma total antes de grabar.</small>
+     </SectionCard>
+    </aside>
+   </div>
+  </form>
+ );
 }

@@ -27,7 +27,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const savedPalette = localStorage.getItem("onlymarket_palette") ?? DEFAULT_PALETTE_ID;
     const pal = getPalette(savedPalette);
     setPaletteState(pal);
-    const savedDark = localStorage.getItem("nl-theme") === "dark";
+    const savedDark =
+      document.documentElement.getAttribute("data-theme") === "dark" ||
+      localStorage.getItem("nl-theme") === "dark";
     setIsDark(savedDark);
     document.documentElement.setAttribute("data-theme", savedDark ? "dark" : "light");
     document.documentElement.classList.toggle("dark", savedDark);
