@@ -10,6 +10,7 @@ import { licenseAction } from "./license";
 import { addCommerce, logoutPlatform } from "./actions";
 import { SlugField } from "./SlugField";
 import { Operation } from "../operations";
+import { PageHead, Metric } from "../v2";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
         </form>
       </header>
       <Notice query={q} />
-      <div className="om-page-intro"><div><span className="om-kicker">Cartera SaaS</span><h2>Gestión de comercios</h2><p>Altas, acceso y licencias desde una sola consola.</p></div>
+      <PageHead kicker="Cartera SaaS" title="Gestión de comercios" subtitle="Altas, acceso y licencias desde una sola consola." actions={
       <Operation title="Crear comercio" trigger="+ Nuevo comercio" wide description={`El comercio accederá por ${scheme}://{slug}.${baseDomain}. Se crea su propietario y sucursal inicial.`}>
         <form action={addCommerce} className="formgrid">
           <Field label="Nombre del comercio">
@@ -84,8 +85,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           </Field>
           <button>Crear comercio</button>
         </form>
-      </Operation></div>
-      <section className="metrics dashboardmetrics">{[["Registrados",count],["Activos",activeCount],["Suspendidos",suspendedCount],["Vencidos",count-activeCount-suspendedCount]].map(([label,value])=><article key={label}><small>{label}</small><strong>{value}</strong></article>)}</section>
+      </Operation>}/>
+      <div className="v2-grid4"><Metric label="Comercios registrados" value={count} hint="Total de la plataforma" icon="box"/><Metric label="Activos" value={activeCount} hint="Acceso habilitado" icon="chart"/><Metric label="Suspendidos" value={suspendedCount} hint="Acceso bloqueado" icon="warn"/><Metric label="Vencidos" value={count-activeCount-suspendedCount} hint="Licencia fuera de vigencia" icon="clock"/></div>
       <section className="panel">
         <div className="sectionhead"><div><h2>Comercios registrados</h2><p>Dominio base: *.{baseDomain}</p></div><form method="get" className="om-searchbar"><input name="q" aria-label="Buscar comercio" placeholder="Nombre o subdominio" defaultValue={term}/><button className="secondary">Buscar</button></form></div>
         <p>Hasta 500 registros. No se accede a ventas, costos o datos personales desde este panel.</p>

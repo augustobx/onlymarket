@@ -59,7 +59,8 @@ try {
         await page.waitForFunction(() => getComputedStyle(document.querySelector(".bh2-tarjeta")).opacity === "1");
       }
       await page.screenshot({ path: join(process.env.SMOKE_ARTIFACT_DIR, `${label}-${mode}.png`), fullPage: true });
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${label}: ${mode} overflow`);
+      const overflow = await page.evaluate(() => ({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("body *")].filter(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1&&r.width>0&&!e.closest(".tablewrap,.v2-tabs,.v2-chart-bars");}).slice(0,12).map(e=>({tag:e.tagName,cls:String(e.className).slice(0,120),right:Math.round(e.getBoundingClientRect().right)}))}));
+      assert.ok(overflow.scroll <= width + 1, `${label}: ${mode} overflow ${JSON.stringify(overflow)}`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
   }
@@ -95,7 +96,7 @@ try {
   await page.getByLabel("Correo electrónico").fill(process.env.BOOTSTRAP_EMAIL);
   await page.getByLabel("Contraseña", { exact: true }).fill(process.env.BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
-  await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+  await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
   await visual("dashboard");
 
   // Verify host-only cookie is NOT shared with another tenant subdomain
@@ -139,6 +140,8 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   await visual("pos");
+  await page.locator(".v2-pos-options summary").click();
+  await page.getByLabel("Escaneo rápido").uncheck();
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
@@ -188,6 +191,45 @@ try {
   await page.getByRole("status").waitFor();
   assert.equal(await db.product.count({ where: { tenantId: tenant.id, sku: "SMOKE-002" } }), 1);
 
+  // V2 workstations use the existing commercial actions with real persisted records.
+  const cheese = await db.product.findFirstOrThrow({where:{tenantId:tenant.id,sku:"SMOKE-002"}});
+  await page.goto(tenantBase + "/inventario?view=recepcion");
+  await page.getByRole("heading",{name:"Recibir mercadería",exact:true}).waitFor();
+  await page.getByLabel("Número de comprobante").fill("V2-SMOKE-RECEIPT");
+  await page.getByLabel("Total del comprobante ($)").fill("6000");
+  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await page.getByLabel("Lote 1",{exact:true}).fill("V2-SMOKE-CHEESE");
+  await page.getByLabel("Cantidad 1",{exact:true}).fill("2");
+  await page.getByLabel("Costo total 1",{exact:true}).fill("6000");
+  const expiry=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  await page.getByLabel("Vencimiento 1",{exact:true}).fill(expiry);
+  await visual("v2-recepcion");
+  await page.getByRole("button",{name:"Registrar compra completa"}).click();
+  await page.getByRole("status").waitFor();
+  const cheeseLot=await db.lot.findFirstOrThrow({where:{tenantId:tenant.id,code:"V2-SMOKE-CHEESE"}});
+  assert.equal(cheeseLot.quantityMilli,2000n);
+  assert.equal(cheeseLot.remainingCostCents,600000n);
+  await page.goto(tenantBase + "/transformaciones?view=nueva&sector=DELI");
+  await page.getByRole("heading",{name:"Mesa de fraccionamiento"}).waitFor();
+  const sourcePicker = page.getByRole("combobox",{name:"Lote de origen",exact:true});
+  await sourcePicker.waitFor({state:"visible"});
+  assert.equal(await sourcePicker.locator("option").evaluateAll((options,id)=>options.filter(o=>o.value===id).length,cheeseLot.id),1,"El lote recibido debe estar disponible para fraccionamiento");
+  await sourcePicker.selectOption(cheeseLot.id);
+  await page.getByLabel("Peso a transformar (kg)").fill("1");
+  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await page.getByLabel("Motivo / detalle 1").fill("Porcionado de prueba");
+  await page.getByLabel("Peso kg 1").fill("1");
+  await visual("v2-produccion");
+  // Verify balance before submit. This workflow is persisted by the original transform action.
+  await page.getByRole("button",{name:"Confirmar transformación"}).click();
+  await page.getByRole("status").waitFor();
+  assert.equal(await db.transformation.count({where:{tenantId:tenant.id,sourceLotId:cheeseLot.id}}),1);
+  await page.goto(tenantBase+"/catalogo");
+  await visual("v2-catalogo");
+  await page.getByRole("row").filter({hasText:"Queso smoke"}).getByRole("button",{name:"Ver ficha ›"}).click();
+  await page.getByRole("dialog",{name:"Queso smoke"}).waitFor();
+  await visual("v2-ficha");
+  await page.getByRole("button",{name:"Cerrar ventana"}).click();
   await page.goto(tenantBase + "/administracion");
   await visual("administracion");
   await page.getByRole("button", { name: "+ Nueva sucursal", exact: true }).click();
@@ -261,6 +303,7 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/pos");
+  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   const scanner = page.getByLabel("Buscar / escanear código");
   for (let i = 0; i < 3; i++) {
@@ -272,7 +315,7 @@ try {
   await page.getByRole("button", { name: "Restar una unidad de Yerba smoke" }).click();
   assert.match(await page.locator(".total").innerText(), /5000,00/);
   await page.getByRole("button", { name: "Sumar una unidad de Yerba smoke" }).click();
-  await page.locator('select[name="payment"]').selectOption("MIXED");
+  await page.getByRole("button",{name:"Pago mixto",exact:true}).click();
   await page.getByLabel("Efectivo asignado").fill("1000");
   await page.getByLabel("Transferencia asignada").fill("4000");
   await page.getByLabel("Efectivo recibido").fill("1200");
@@ -373,6 +416,7 @@ try {
   await page.getByRole("button", { name: "Abrir caja" }).click();
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   const comboScan = page.getByLabel("Buscar / escanear código");
+  if (!(await page.locator(".v2-pos-options").evaluate(el=>el.open))) await page.locator(".v2-pos-options summary").click();
   await page.getByLabel("Escaneo rápido").check();
   for (const code of ["COMBO-A", "COMBO-B"]) {
     await comboScan.fill(code);
@@ -385,7 +429,7 @@ try {
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
   await page.getByLabel("Cliente (opcional)").selectOption(member.id);
   assert.match(await page.locator(".total").innerText(), /3925,00/);
-  await page.locator('select[name="payment"]').selectOption("TRANSFER");
+  await page.getByRole("button",{name:"Transferencia",exact:true}).click();
   await page.getByRole("button", { name: "Confirmar venta" }).click();
   await page.getByRole("status").filter({ hasText: "Venta registrada" }).waitFor();
   const memberSale = await db.sale.findFirstOrThrow({ where: { tenantId: tenant.id, customerId: member.id }, include: { lines: true } });
@@ -475,7 +519,7 @@ try {
   const [loginResponse] = await Promise.all([post, page.getByRole("button", { name: "Ingresar", exact: true }).click()]);
   assert.ok(loginResponse.status() >= 200 && loginResponse.status() < 400, `Tenant 2 login HTTP ${loginResponse.status()}`);
   try {
-    await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+    await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
   } catch (error) {
     const cookie = (await page.context().cookies(secondBase)).find(c => c.name === "onlymarket_session");
     const sessionCount = await db.session.count({ where: { tenantId: second.id, userId: secondOwner.id } });
@@ -535,7 +579,7 @@ try {
   await reactivateRow.getByRole("button", { name: "Guardar licencia" }).click();
   await page.getByRole("status").filter({ hasText: "Licencia actualizada" }).waitFor();
   await page.goto("http://platform-smoke.localhost:3000/");
-  await page.getByRole("heading", { name: "Resumen operativo" }).waitFor();
+  await page.getByRole("heading", { name: "Resumen del negocio" }).waitFor();
 
   // Expired tenant blocks access with branded screen (and no login form)
   const expiredOwnerHash = await hashPassword("CI-expired-owner-password");

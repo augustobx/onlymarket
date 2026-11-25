@@ -20,17 +20,19 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
  const groups=[
   {name:"Operación",items:[
    ...(s.role!=="CASHIER"?[{href:"/",label:"Resumen",icon:"home"},{href:"/alertas",label:"Alertas",icon:"bell"}]:[]),
-   ...(s.role!=="INVENTORY"?[{href:"/pos",label:"Punto de venta",icon:"cart"}]:[])
+   ...(s.role!=="INVENTORY"?[{href:"/pos",label:"Terminal de caja",icon:"cart"}]:[])
   ]},
   ...(s.role!=="CASHIER"?[{name:"Mercadería",items:[
-   {href:"/inventario",label:"Inventario y compras",icon:"box"},
+   {href:"/catalogo",label:"Productos e inventario",icon:"box"},
+   {href:"/inventario",label:"Compras y recepción",icon:"truck"},
    {href:"/stock",label:"Conteos y traslados",icon:"trace"},
    {href:"/reposicion",label:"Reposición",icon:"truck"},
-   {href:"/catalogo",label:"Catálogo",icon:"grid"},
+   
    {href:"/proveedores",label:"Proveedores",icon:"truck"},
-   ...(showTransform(s.profile)?[{href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale"}]:[]),
+
    {href:"/trazabilidad",label:"Trazabilidad",icon:"trace"}
   ]}]:[]),
+  ...(s.role!=="CASHIER"&&showTransform(s.profile)?[{name:"Producción",items:[{href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale"}]}]:[]),
   ...(manager?[{name:"Administración comercial",items:[
    {href:"/promociones",label:"Promociones",icon:"tag"},
    {href:"/combos",label:"Combos",icon:"tag"},
@@ -49,18 +51,17 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
   <>
    <Link href="/cuenta" className="footer-link">Mi cuenta</Link>
    <form action={logoutAction}><button className="secondary">Cerrar sesión</button></form>
-   <small>OnlyMarket · v1.0 RC · NanoLabs</small>
+   <small>OnlyMarket · NanoLabs</small>
   </>
  );
 
  const header=(
   <header className="topbar">
    <div className="topbar-title">
-    <small className="om-breadcrumb">Área de trabajo <span> / </span> {s.tenantName}</small>
-    <h1>{title}</h1>
+    <div className="v2-crumb"><span>Administración / </span><strong>{title}</strong></div>
    </div>
    <div className="topbar-actions">
-    {s.role!=="INVENTORY"&&<Link href="/pos" className="om-top-pos" aria-label="Abrir punto de venta"><span aria-hidden="true">↗</span> Caja</Link>}
+    {s.role!=="INVENTORY"&&<Link href="/pos" className="om-top-pos" aria-label="Abrir punto de venta"><span aria-hidden="true">↗</span> Ir a caja</Link>}
     <PaletteSelector/>
     <DarkModeToggle/>
     <Link href="/cuenta" className="userchip" title="Mi cuenta">
@@ -83,7 +84,7 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
    footer={footer}
    header={header}
   >
-   {s.role==="CASHIER"&&!allowCashier?<p className="notice"><Link href="/pos">Ir al punto de venta</Link></p>:children}
+   {s.role==="CASHIER"&&!allowCashier?<p className="notice"><Link href="/pos">Ir al punto de venta</Link></p>:<>{title!=="Resumen operativo"&&title!=="Catálogo de productos"&&title!=="Inventario y lotes"&&title!=="Desposte y fraccionamiento"&&<h1 className="v2-module-title">{title}</h1>}{children}</>}
   </WorkspaceFrame>
  );
 }
