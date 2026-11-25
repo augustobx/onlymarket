@@ -104,6 +104,8 @@ try {
   assert.equal(sessionCookie.domain, `${slug}.localhost`);
 
   await page.goto(tenantBase + "/catalogo");
+  await page.getByRole("button", { name: "+ Nuevo producto", exact: true }).click();
+  await page.getByRole("dialog", { name: "Nuevo producto" }).waitFor();
   const newProduct = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear producto", exact: true }) });
   await newProduct.getByLabel("Nombre", { exact: true }).fill("Yerba smoke");
   await newProduct.getByLabel("SKU", { exact: true }).fill("SMOKE-001");
@@ -114,11 +116,13 @@ try {
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/proveedores");
+  await page.getByRole("button", { name: "+ Nuevo proveedor", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Proveedor smoke");
   await page.getByRole("button", { name: "Crear proveedor" }).click();
   await page.getByRole("status").waitFor();
 
   await page.goto(tenantBase + "/inventario");
+  await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const receive = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
   await receive.getByLabel("Código de lote").fill("SMOKE-LOT");
   await receive.getByLabel("Cantidad (kg o unidades)").fill("3");
@@ -222,6 +226,7 @@ try {
   assert.match(await shortageCard.innerText(), /1500,00/);
 
   await page.goto(tenantBase + "/inventario");
+  await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const newReceipt = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
   await newReceipt.getByLabel("Sucursal").selectOption(lot.branchId);
   await newReceipt.locator('select[name="productId"]').selectOption(lot.productId);
@@ -403,6 +408,8 @@ try {
   assert.equal((await reservedCheck.json()).available, false);
 
   // Create second commerce via SuperAdmin
+  await page.getByRole("button", { name: "+ Nuevo comercio", exact: true }).click();
+  await page.getByRole("dialog", { name: "Crear comercio" }).waitFor();
   await page.getByLabel("Nombre del comercio").fill("Segundo comercio smoke");
   await page.getByLabel("Subdominio de acceso").fill("platform-smoke");
   await page.getByLabel("Correo del propietario").fill("platform-owner@example.invalid");
@@ -479,6 +486,7 @@ try {
   // Suspend Tenant 2 and verify access is blocked with branded screen (and no login form)
   await page.goto(platformBase + "/superadmin");
   const licenseRow = page.getByRole("row").filter({ hasText: "Segundo comercio smoke" });
+  await licenseRow.getByRole("button", { name: "Editar licencia" }).click();
   await licenseRow.getByLabel("Plan", { exact: true }).selectOption("PRO");
   await licenseRow.getByLabel("Suspender acceso").check();
   await licenseRow.getByRole("button", { name: "Guardar licencia" }).click();
@@ -498,6 +506,7 @@ try {
   await page.waitForURL("**/login");
   await page.goto(platformBase + "/superadmin");
   const reactivateRow = page.getByRole("row").filter({ hasText: "Segundo comercio smoke" });
+  await reactivateRow.getByRole("button", { name: "Editar licencia" }).click();
   await reactivateRow.getByLabel("Suspender acceso").uncheck();
   await reactivateRow.getByRole("button", { name: "Guardar licencia" }).click();
   await page.getByRole("status").filter({ hasText: "Licencia actualizada" }).waitFor();

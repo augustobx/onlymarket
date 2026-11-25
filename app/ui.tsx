@@ -56,10 +56,11 @@ export async function Shell({title,children,allowCashier=false}:{title:string;ch
  const header=(
   <header className="topbar">
    <div className="topbar-title">
-    <small>OnlyMarket / {s.tenantName}</small>
+    <small className="om-breadcrumb">Área de trabajo <span> / </span> {s.tenantName}</small>
     <h1>{title}</h1>
    </div>
    <div className="topbar-actions">
+    {s.role!=="INVENTORY"&&<Link href="/pos" className="om-top-pos" aria-label="Abrir punto de venta"><span aria-hidden="true">↗</span> Caja</Link>}
     <PaletteSelector/>
     <DarkModeToggle/>
     <Link href="/cuenta" className="userchip" title="Mi cuenta">

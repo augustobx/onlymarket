@@ -9,10 +9,11 @@ import { buildTenantUrl, getPlatformDomain, getTenantBaseDomain, getTenantUrlSch
 import { licenseAction } from "./license";
 import { addCommerce, logoutPlatform } from "./actions";
 import { SlugField } from "./SlugField";
+import { Operation } from "../operations";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; q?: string }> }) {
   const ctx = await getHostContext();
   if (ctx.kind !== "platform") {
     notFound();
@@ -25,8 +26,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   const scheme = getTenantUrlScheme();
   const platformDomain = getPlatformDomain();
 
-  const [tenants, count, audits] = await Promise.all([
+  const term=(q.q??"").trim().slice(0,120);
+  const [tenants, count, activeCount, suspendedCount, audits] = await Promise.all([
     db.tenant.findMany({
+      where:term?{OR:[{name:{contains:term,mode:"insensitive"}},{slug:{contains:term,mode:"insensitive"}}]}:{},
       select: {
         id: true,
         name: true,
@@ -41,6 +44,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
       take: 500,
     }),
     db.tenant.count(),
+    db.tenant.count({where:{suspended:false,OR:[{licenseUntil:null},{licenseUntil:{gte:new Date(today+"T00:00:00Z")}}]}}),
+    db.tenant.count({where:{suspended:true}}),
     db.platformAudit.findMany({
       include: { admin: { select: { email: true } } },
       orderBy: { createdAt: "desc" },
@@ -49,38 +54,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   ]);
 
   return (
-    <main className="platformpage">
+    <main className="platformpage om-platform">
       <header className="topbar">
         <div>
-          <small>NANOLABS · CONTROL CENTRAL · {platformDomain}</small>
+          <small className="om-kicker">NanoLabs / Administración de plataforma</small>
           <h1>OnlyMarket / Comercios</h1>
-          <p>{s.email}</p>
+          <p>{s.email} · {platformDomain}</p>
         </div>
         <form action={logoutPlatform}>
           <button className="secondary">Cerrar sesión de plataforma</button>
         </form>
       </header>
       <Notice query={q} />
-      <section className="metrics">
-        <article>
-          <small>Comercios registrados</small>
-          <strong>{count}</strong>
-        </article>
-        <article>
-          <small>Dominio base tenants</small>
-          <strong>*.{baseDomain}</strong>
-          <small>Aprovisionamiento vía router NanoApps</small>
-        </article>
-      </section>
-      <section className="panel">
-        <h2>Crear comercio</h2>
-        <p>
-          Se crea una sucursal inicial y un propietario independiente. El comercio accederá directamente desde{" "}
-          <code>
-            {scheme}://{"{subdominio}"}.{baseDomain}
-          </code>
-          . Se validan colisiones con otros sistemas de NanoLabs.
-        </p>
+      <div className="om-page-intro"><div><span className="om-kicker">Cartera SaaS</span><h2>Gestión de comercios</h2><p>Altas, acceso y licencias desde una sola consola.</p></div>
+      <Operation title="Crear comercio" trigger="+ Nuevo comercio" wide description={`El comercio accederá por ${scheme}://{slug}.${baseDomain}. Se crea su propietario y sucursal inicial.`}>
         <form action={addCommerce} className="formgrid">
           <Field label="Nombre del comercio">
             <input name="name" required maxLength={120} />
@@ -97,9 +84,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           </Field>
           <button>Crear comercio</button>
         </form>
-      </section>
+      </Operation></div>
+      <section className="metrics dashboardmetrics">{[["Registrados",count],["Activos",activeCount],["Suspendidos",suspendedCount],["Vencidos",count-activeCount-suspendedCount]].map(([label,value])=><article key={label}><small>{label}</small><strong>{value}</strong></article>)}</section>
       <section className="panel">
-        <h2>Comercios registrados</h2>
+        <div className="sectionhead"><div><h2>Comercios registrados</h2><p>Dominio base: *.{baseDomain}</p></div><form method="get" className="om-searchbar"><input name="q" aria-label="Buscar comercio" placeholder="Nombre o subdominio" defaultValue={term}/><button className="secondary">Buscar</button></form></div>
         <p>Hasta 500 registros. No se accede a ventas, costos o datos personales desde este panel.</p>
         <div className="tablewrap">
           <table>
@@ -112,7 +100,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                 <th>Sucursales</th>
                 <th>Accesos</th>
                 <th>Productos</th>
-                <th>Licencia</th>
+                <th>Plan / Vencimiento</th><th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -123,7 +111,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                 const statusClass = t.suspended || !active ? "BLOCKED" : "AVAILABLE";
                 return (
                   <tr key={t.id}>
-                    <td>{t.name}</td>
+                    <td><div className="om-entity"><span className="om-entity-icon" aria-hidden="true">{t.name.slice(0,2).toUpperCase()}</span><div><strong>{t.name}</strong><small>{t.slug}</small></div></div></td>
                     <td>
                       <code>{t.slug}</code>
                       <small>
@@ -139,7 +127,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                     <td>{t._count.branches}</td>
                     <td>{t._count.members}</td>
                     <td>{t._count.products}</td>
-                    <td>
+                    <td><strong>{plans[t.plan]}</strong><small>{t.licenseUntil?.toISOString().slice(0,10).split("-").reverse().join("/")??"Sin vencimiento"}</small></td>
+                    <td><Operation title={"Licencia · "+t.name} trigger="Editar licencia" variant="secondary" description="Los cambios de acceso tienen efecto en las sesiones del comercio.">
                       <form action={licenseAction} className="fields">
                         <input type="hidden" name="tenantId" value={t.id} />
                         <select name="plan" defaultValue={t.plan} aria-label="Plan">
@@ -159,21 +148,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                           <input type="checkbox" name="suspended" value="yes" defaultChecked={t.suspended} /> Suspender acceso
                         </label>
                         <button>Guardar licencia</button>
-                      </form>
+                      </form></Operation>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </div>
+        </div>{!tenants.length&&<p className="empty">No hay comercios que coincidan con la búsqueda.</p>}
       </section>
       <section className="panel">
         <h2>Últimas operaciones de plataforma</h2>
         {audits.map((a) => (
-          <p key={a.id}>
-            {a.createdAt.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })} · {a.admin.email} · {a.detail}
-          </p>
+          <div className="om-audit-row" key={a.id}><div><strong>{a.detail}</strong><small>{a.admin.email}</small></div><time>{a.createdAt.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}</time></div>
         ))}
         {!audits.length && <p>Sin operaciones registradas.</p>}
       </section>
