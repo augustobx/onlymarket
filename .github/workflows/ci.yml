@@ -32,6 +32,7 @@ jobs:
       - run: npm run db:validate
       - run: npm run db:deploy
       - run: npx prisma generate
+      - run: npx tsc --noEmit
       - run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
       - run: npm test
         env:
@@ -45,6 +46,10 @@ jobs:
           BOOTSTRAP_NAME: Browser Smoke
           BOOTSTRAP_PASSWORD: CI-only-test-password-2026
           PLATFORM_ADMIN_ENABLED: 'true'
+          PLATFORM_DOMAIN: localhost
+          TENANT_BASE_DOMAIN: localhost
+          TENANT_URL_PORT: '3000'
+          SMOKE_FAILURE_DIR: /tmp/onlymarket-smoke-failure
           PLATFORM_BOOTSTRAP_EMAIL: platform-smoke@example.invalid
           PLATFORM_BOOTSTRAP_PASSWORD: CI-only-platform-test-password
           HUB_INTEGRATION_TOKEN: CI-only-hub-test-token-not-production-12345
@@ -58,6 +63,14 @@ jobs:
           done
           curl -fsS http://localhost:3000/api/health
           npm run test:browser || { cat /tmp/onlymarket-next.log; exit 1; }
+      - name: Upload browser failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlymarket-browser-failure
+          path: /tmp/onlymarket-smoke-failure/
+          if-no-files-found: ignore
+          retention-days: 5
   docker-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20

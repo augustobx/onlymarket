@@ -15,6 +15,11 @@ services:
       timeout: 5s
       retries: 10
     networks: [private]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   app:
     build: .
     container_name: onlymarket-web
@@ -23,6 +28,14 @@ services:
       DATABASE_URL: postgresql://onlymarket:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/onlymarket
       TZ: America/Argentina/Buenos_Aires
       PLATFORM_ADMIN_ENABLED: ${PLATFORM_ADMIN_ENABLED:-false}
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-onlymarket.nanoapps.ar}
+      TENANT_BASE_DOMAIN: ${TENANT_BASE_DOMAIN:-nanoapps.ar}
+      TENANT_URL_SCHEME: ${TENANT_URL_SCHEME:-}
+      TENANT_URL_PORT: ${TENANT_URL_PORT:-}
+      NANOAPPS_ROUTER_URL: ${NANOAPPS_ROUTER_URL-http://nanoapps-router:8080}
+      EXTERNAL_SAAS_ASK_URLS: ${EXTERNAL_SAAS_ASK_URLS:-}
+      TENANT_NAMESPACE_MODE: ${TENANT_NAMESPACE_MODE:-shared}
+      RESERVED_SLUGS: ${RESERVED_SLUGS:-}
       HUB_INTEGRATION_TOKEN: ${HUB_INTEGRATION_TOKEN:-}
     depends_on:
       db:
@@ -34,6 +47,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   onlymarket_data:
 networks:
