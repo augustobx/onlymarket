@@ -63,6 +63,7 @@ model Tenant {
   suspended Boolean @default(false)
   weightPrefix String?
   pointsEveryCents BigInt @default(100000)
+  pointValueCents BigInt @default(0)
   memberDiscountBps Int @default(0)
   customers Customer[]
   combos Combo[]
@@ -113,6 +114,7 @@ model Product {
   freshnessDays Int?
   openedLifeDays Int?
   weightCode String?
+  quickAccess   Boolean @default(false)
   active        Boolean @default(true)
   tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lots          Lot[]
@@ -594,8 +596,25 @@ model Customer {
  createdAt DateTime @default(now())
  tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Restrict,onUpdate:Cascade)
  sales Sale[]
+ redemptions PointRedemption[]
  @@id([tenantId,id])
  @@unique([tenantId,code])
+}
+model PointRedemption {
+ id String @default(uuid())
+ tenantId String
+ customerId String
+ actorId String
+ requestKey String
+ requestHash String
+ points BigInt
+ valueCents BigInt
+ reason String
+ createdAt DateTime @default(now())
+ customer Customer @relation(fields:[tenantId,customerId],references:[tenantId,id],onDelete:Restrict,onUpdate:Cascade)
+ @@id([tenantId,id])
+ @@unique([tenantId,requestKey])
+ @@index([tenantId,customerId,createdAt])
 }
 model Combo {
  id String @default(uuid())

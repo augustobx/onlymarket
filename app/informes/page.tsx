@@ -99,6 +99,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{from?:s
     kicker="Análisis del comercio"
     title="Informes de rentabilidad"
     subtitle="Rendimiento por área, ventas netas, costos, pérdidas, proveedores y carnicería."
+    actions={
+     <a className="actionlink secondarylink" href={"/api/export?"+new URLSearchParams({type:"informes",from,to}).toString()}>
+      <Icon name="layers" size={15}/>
+      <span>Exportar CSV</span>
+     </a>
+    }
    />
 
    <SectionCard title="Período de análisis" icon="sliders" padded>

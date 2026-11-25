@@ -17,7 +17,7 @@ export const dynamic="force-dynamic";
 export default async function Page({
  searchParams,
 }:{
- searchParams:Promise<{error?:string;ok?:string;lot?:string;view?:string;q?:string}>;
+ searchParams:Promise<{error?:string;ok?:string;lot?:string;view?:string;q?:string;branch?:string;state?:string;page?:string}>;
 }){
  const s=await requireSession();
  if(s.role==="CASHIER")return <Shell title="Inventario"/>;
@@ -35,15 +35,32 @@ export default async function Page({
     ...where,
     quantityMilli:{gt:0n},
     ...(query.lot?{id:query.lot}:{}),
+    ...(query.branch?{branchId:query.branch}:{}),
     ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}}]}:{}),
    },
    include:{product:true,branch:true,supplier:true},
    orderBy:[{expiresOn:"asc"},{receivedAt:"asc"}],
-   take:500,
+   take:1500,
   }),
  ]);
 
  const today=localDay();
+ const stateFilter=query.state&&Object.prototype.hasOwnProperty.call(states,query.state)?query.state:"";
+ const lotRows=lots.map(l=>({
+  l,
+  state:classifyLot({
+   today,
+   expiresOn:l.expiresOn?.toISOString().slice(0,10)??null,
+   reviewOn:l.reviewAt?localDay(l.reviewAt):null,
+   alertDays:l.product.alertDays,
+   status:l.status,
+   quantityMilli:l.quantityMilli,
+  }),
+ })).filter(r=>!stateFilter||r.state===stateFilter);
+ const pageSize=50,totalPages=Math.max(1,Math.ceil(lotRows.length/pageSize));
+ const page=Math.min(totalPages,Math.max(1,Number(query.page??"1")||1));
+ const lotSlice=lotRows.slice((page-1)*pageSize,page*pageSize);
+ const lotUrl=(p:number)=>"/inventario?"+new URLSearchParams({...(term?{q:term}:{}),...(query.branch?{branch:query.branch}:{}),...(stateFilter?{state:stateFilter}:{}),...(query.lot?{lot:query.lot}:{}),...(p>1?{page:String(p)}:{})}).toString();
  const receipts=await db.receipt.findMany({
   where:{...where,purchaseId:null},
   include:{supplier:true,branch:true,lot:{include:{product:true}}},
@@ -52,7 +69,7 @@ export default async function Page({
  });
  const purchases=await db.purchase.findMany({
   where,
-  include:{supplier:true,branch:true,_count:{select:{receipts:true}}},
+  include:{supplier:true,branch:true,receipts:{include:{lot:{include:{product:true}}}},_count:{select:{receipts:true}}},
   orderBy:{createdAt:"desc"},
   take:100,
  });
@@ -165,6 +182,7 @@ export default async function Page({
            <th>Fecha</th>
            <th>Lotes</th>
            <th>Total</th>
+           <th>Detalle</th>
           </tr>
          </thead>
          <tbody>
@@ -176,6 +194,23 @@ export default async function Page({
             <td className="mono">{localDay(p.createdAt)}</td>
             <td className="mono">{p._count.receipts}</td>
             <td className="mono"><strong>{formatMoney(p.totalCostCents)}</strong></td>
+            <td>
+             <Operation title={`Comprobante · ${p.invoiceRef}`} trigger="Ver detalle" variant="secondary" drawer>
+              <p><strong>{p.supplier.name}</strong> · {p.branch.name} · {localDay(p.createdAt)}</p>
+              <p>Total comprobante: <strong className="mono">{formatMoney(p.totalCostCents)}</strong></p>
+              <div className="v2-records">
+               {p.receipts.map(rc=>(
+                <div key={rc.id}>
+                 <div>
+                  <strong>{rc.lot.product.name}</strong>
+                  <small className="mono">{rc.lot.code} · {amount(rc.quantityMilli,rc.lot.product.unit)} · {money(rc.totalCostCents)}</small>
+                 </div>
+                 <Link className="om-link-chip" href={"/trazabilidad?lot="+rc.lotId}>Kardex</Link>
+                </div>
+               ))}
+              </div>
+             </Operation>
+            </td>
            </tr>
           ))}
          </tbody>
@@ -224,7 +259,7 @@ export default async function Page({
 
    <SectionCard
     title="Lotes con stock"
-    subtitle="Hasta 500 lotes activos ordenados por vencimiento"
+    subtitle={`Mostrando ${lotSlice.length} de ${lotRows.length} lotes ordenados por vencimiento`}
     icon="box"
     actions={
      <Link className="actionlink secondarylink" href="/stock">
@@ -238,14 +273,22 @@ export default async function Page({
       <Icon name="search" size={16}/>
       <input name="q" aria-label="Buscar lote, producto o SKU" placeholder="Buscar por lote, producto o SKU..." defaultValue={term}/>
      </label>
+     <select name="branch" aria-label="Sucursal" defaultValue={query.branch??""}>
+      <option value="">Todas las sucursales</option>
+      {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+     </select>
+     <select name="state" aria-label="Estado" defaultValue={stateFilter}>
+      <option value="">Todos los estados</option>
+      {Object.entries(states).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+     </select>
      <button className="secondary">
       <Icon name="filter" size={15}/>
       <span>Buscar</span>
      </button>
-     {(query.lot||term)&&<Link className="actionlink secondarylink" href="/inventario">Ver todos</Link>}
+     {(query.lot||term||query.branch||stateFilter)&&<Link className="actionlink secondarylink" href="/inventario">Ver todos</Link>}
     </form>
 
-    {lots.length>0?(
+    {lotSlice.length>0?(
      <div className="tablewrap">
       <table>
        <thead>
@@ -261,15 +304,7 @@ export default async function Page({
         </tr>
        </thead>
        <tbody>
-        {lots.map(l=>{
-         const state=classifyLot({
-          today,
-          expiresOn:l.expiresOn?.toISOString().slice(0,10)??null,
-          reviewOn:l.reviewAt?localDay(l.reviewAt):null,
-          alertDays:l.product.alertDays,
-          status:l.status,
-          quantityMilli:l.quantityMilli,
-         });
+        {lotSlice.map(({l,state})=>{
          return (
           <tr key={l.id}>
            <td>
@@ -304,6 +339,9 @@ export default async function Page({
               <Field label="Motivo / control realizado">
                <input name="reason" required placeholder="Motivo / control realizado" maxLength={300}/>
               </Field>
+              {l.status==="BLOCKED"&&(
+               <small>{["OWNER","MANAGER"].includes(s.role)?"Como propietario o encargado podés rehabilitar un lote bloqueado manualmente si no está vencido.":"Solo propietario o encargado pueden rehabilitar un lote bloqueado."}</small>
+              )}
               <button>Guardar</button>
              </form>
             </Operation>
@@ -341,6 +379,17 @@ export default async function Page({
      </div>
     ):(
      <EmptyState icon="box" title="No hay lotes con stock" description="Cuando recibas mercadería aparecerá aquí para control y trazabilidad."/>
+    )}
+    {lotRows.length>0&&(
+     <div className="v2-tablefoot" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <span>Mostrando {lotSlice.length} de {lotRows.length} lotes · Página {page} de {totalPages}</span>
+      {totalPages>1&&(
+       <div className="om-row-actions">
+        {page>1&&<Link className="om-link-chip" href={lotUrl(page-1)}>‹ Anterior</Link>}
+        {page<totalPages&&<Link className="om-link-chip" href={lotUrl(page+1)}>Siguiente ›</Link>}
+       </div>
+      )}
+     </div>
     )}
    </SectionCard>
   </Shell>

@@ -15,7 +15,7 @@ export const dynamic="force-dynamic";
 export default async function Page({
  searchParams,
 }:{
- searchParams:Promise<{error?:string;ok?:string;q?:string;sector?:string;state?:string;branch?:string;sort?:string}>;
+ searchParams:Promise<{error?:string;ok?:string;q?:string;sector?:string;state?:string;branch?:string;sort?:string;page?:string}>;
 }){
  const s=await requireSession();
  if(s.role==="CASHIER")return <Shell title="Catálogo"/>;
@@ -72,7 +72,10 @@ export default async function Page({
  if(query.sort==="price")filtered.sort((a,b)=>a.p.salePriceCents>b.p.salePriceCents?-1:a.p.salePriceCents<b.p.salePriceCents?1:0);
  if(query.sort==="stock")filtered.sort((a,b)=>a.usable>b.usable?-1:a.usable<b.usable?1:0);
 
- const url=(sector:string)=>"/catalogo?"+new URLSearchParams({q:term,sector,state:query.state??"",branch:branch??"",sort:query.sort??""}).toString();
+ const pageSize=50,totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
+ const page=Math.min(totalPages,Math.max(1,Number(query.page??"1")||1));
+ const slice=filtered.slice((page-1)*pageSize,page*pageSize);
+ const url=(sector:string,p=1)=>"/catalogo?"+new URLSearchParams({q:term,sector,state:query.state??"",branch:branch??"",sort:query.sort??"",...(p>1?{page:String(p)}:{})}).toString();
  const labels:Record<string,string>={normal:"Normal",inactive:"Inactivo",held:"Revisar",empty:"Sin stock apto",low:"Bajo mínimo"};
  const classes:Record<string,string>={normal:"AVAILABLE",inactive:"EXHAUSTED",held:"REVIEW",empty:"BLOCKED",low:"EXPIRING"};
 
@@ -111,6 +114,12 @@ export default async function Page({
         <Field label="Avisar antes de vencer (días)"><input name="alertDays" type="number" min="0" max="365" required defaultValue="3"/></Field>
         <Field label="Revisar frescura después de (días)"><input name="freshnessDays" type="number" min="1" max="365"/></Field>
         <Field label="Vida útil tras apertura (días)"><input name="openedLifeDays" type="number" min="1" max="365"/></Field>
+        <Field label="Acceso rápido en POS">
+         <select name="quickAccess" defaultValue="no">
+          <option value="no">No</option>
+          <option value="yes">Sí (fijar en grilla rápida)</option>
+         </select>
+        </Field>
         <button>Crear producto</button>
        </form>
       </Operation>
@@ -209,7 +218,7 @@ export default async function Page({
         </tr>
        </thead>
        <tbody>
-        {filtered.slice(0,500).map(r=>{
+        {slice.map(r=>{
          const {p}=r;
          const pct=r.unitCost!==null&&p.salePriceCents>0n
           ?(Number((p.salePriceCents-r.unitCost)*10000n/p.salePriceCents)/100).toLocaleString("es-AR")+"%"
@@ -220,7 +229,7 @@ export default async function Page({
             <div className="v2-product-cell">
              <span className="v2-symbol"><Icon name={sectorIcons[p.sector]??"box"} size={16}/></span>
              <div>
-              <strong>{p.name}</strong>
+              <strong>{p.name}{p.quickAccess?" ★":""}</strong>
               <small className="mono">{p.sku}{p.barcode?" · "+p.barcode:""}{p.weightCode?" · PLU "+p.weightCode:""}</small>
              </div>
             </div>
@@ -273,11 +282,22 @@ export default async function Page({
                <Field label="Nombre"><input name="name" defaultValue={p.name} required/></Field>
                <Field label="SKU"><input name="sku" defaultValue={p.sku} required/></Field>
                <Field label="Código de barras"><input name="barcode" defaultValue={p.barcode??""}/></Field>
+               <Field label="Sector">
+                <select name="sector" defaultValue={p.sector}>
+                 {Object.entries(sectors).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                </select>
+               </Field>
                <Field label="PLU de peso (5 dígitos, opcional)"><input name="weightCode" defaultValue={p.weightCode??""} pattern="[0-9]{5}" maxLength={5}/></Field>
                <Field label="Precio por unidad/kg"><input name="price" defaultValue={fixed(p.salePriceCents,2)} required inputMode="decimal"/></Field>
                <Field label="Aviso (días)"><input name="alertDays" type="number" min="0" max="365" defaultValue={p.alertDays} required/></Field>
                <Field label="Frescura (días, futuros ingresos)"><input name="freshnessDays" type="number" min="1" max="365" defaultValue={p.freshnessDays??""}/></Field>
                <Field label="Vida útil tras apertura (días, futuras aperturas)"><input name="openedLifeDays" type="number" min="1" max="365" defaultValue={p.openedLifeDays??""}/></Field>
+               <Field label="Acceso rápido en POS">
+                <select name="quickAccess" defaultValue={p.quickAccess?"yes":"no"}>
+                 <option value="no">No</option>
+                 <option value="yes">Sí (fijar en grilla rápida)</option>
+                </select>
+               </Field>
                <Field label="Estado">
                 <select name="active" defaultValue={p.active?"yes":"no"}>
                  <option value="yes">Activo</option>
@@ -299,8 +319,14 @@ export default async function Page({
      <EmptyState icon="search" title="Sin productos coincidentes" description="Probá limpiando los filtros o creá un nuevo artículo en el catálogo."/>
     )}
 
-    <div className="v2-tablefoot">
-     Mostrando {Math.min(filtered.length,500)} de {filtered.length} productos · Costo promedio ponderado de referencia del stock apto.
+    <div className="v2-tablefoot" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+     <span>Mostrando {slice.length} de {filtered.length} productos · Página {page} de {totalPages} · Costo promedio ponderado de referencia del stock apto.</span>
+     {totalPages>1&&(
+      <div className="om-row-actions">
+       {page>1&&<Link className="om-link-chip" href={url(query.sector??"",page-1)}>‹ Anterior</Link>}
+       {page<totalPages&&<Link className="om-link-chip" href={url(query.sector??"",page+1)}>Siguiente ›</Link>}
+      </div>
+     )}
     </div>
    </section>
   </Shell>

@@ -117,6 +117,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{q?:stri
       title={`${detail.product.name} · ${detail.code}`}
       subtitle={`Ingreso ${detail.receivedAt.toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}`}
       icon="trace"
+      actions={
+       <a className="actionlink secondarylink" href={"/api/export?"+new URLSearchParams({type:"trazabilidad",lot:detail.id}).toString()}>
+        <Icon name="layers" size={15}/>
+        <span>Exportar kardex CSV</span>
+       </a>
+      }
      >
       <div className="om-card__body--pad">
        <p>

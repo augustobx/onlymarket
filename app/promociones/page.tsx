@@ -1,19 +1,23 @@
+import Link from "next/link";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
 import {Shell,Notice,Field,amount} from "../ui";
 import {PageHeader,SectionCard,EmptyState,InfoCallout} from "../components/retail-ui";
+import {Icon} from "../components/icons";
 import RuleFields from "./rule-fields";
 import {createPromotion,disablePromotion} from "./actions";
 
 export const dynamic="force-dynamic";
 
-export default async function Page({searchParams}:{searchParams:Promise<{error?:string;ok?:string;lot?:string}>}){
+export default async function Page({searchParams}:{searchParams:Promise<{error?:string;ok?:string;lot?:string;q?:string;state?:string}>}){
  const s=await requireSession();
  if(!["OWNER","MANAGER"].includes(s.role))return <Shell title="Promociones"><p className="error">Sin permisos.</p></Shell>;
 
  const query=await searchParams;
+ const term=(query.q??"").trim().slice(0,120).toLowerCase();
+ const stateFilter=query.state??"";
  const where={tenantId:s.tenantId};
  const [products,lots,promos]=await Promise.all([
   db.product.findMany({where:{...where,active:true},orderBy:{name:"asc"}}),
@@ -22,6 +26,16 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
  ]);
  const selected=lots.find(l=>l.id===query.lot&&l.product.active);
  const today=localDay();
+
+ const rows=promos.map(p=>{
+  const start=p.startsOn.toISOString().slice(0,10);
+  const end=p.endsOn.toISOString().slice(0,10);
+  const statusKey=!p.active?"inactive":today<start?"scheduled":today>end?"ended":"active";
+  return {p,start,end,statusKey};
+ }).filter(({p,statusKey})=>
+  (!stateFilter||statusKey===stateFilter)&&
+  (!term||p.name.toLowerCase().includes(term)||p.product.name.toLowerCase().includes(term)||(p.lot?.code??"").toLowerCase().includes(term))
+ );
 
  return (
   <Shell title="Promociones">
@@ -61,14 +75,32 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
     }
    />
 
-   <SectionCard title="Promociones registradas" subtitle="Hasta 500 reglas configuradas" icon="tag">
+   <SectionCard title="Promociones registradas" subtitle={`${rows.length} de ${promos.length} reglas`} icon="tag">
     <div className="om-card__body--pad" style={{paddingBottom:0}}>
      <InfoCallout icon="info">
       En caja se aplica automáticamente la promoción vigente que mayor ahorro genere para el cliente, sin acumulaciones indebidas.
      </InfoCallout>
+     <form method="get" className="v2-toolbar" style={{marginTop:14,marginBottom:0,padding:0,borderBottom:"none"}}>
+      <label className="v2-search">
+       <Icon name="search" size={16}/>
+       <input name="q" aria-label="Buscar promoción o producto" placeholder="Buscar promoción, producto o lote..." defaultValue={query.q??""}/>
+      </label>
+      <select name="state" aria-label="Estado" defaultValue={stateFilter}>
+       <option value="">Todos los estados</option>
+       <option value="active">Vigente</option>
+       <option value="scheduled">Programada</option>
+       <option value="ended">Finalizada</option>
+       <option value="inactive">Desactivada</option>
+      </select>
+      <button className="secondary">
+       <Icon name="filter" size={15}/>
+       <span>Filtrar</span>
+      </button>
+      {(term||stateFilter)&&<Link className="actionlink secondarylink" href="/promociones">Limpiar</Link>}
+     </form>
     </div>
 
-    {promos.length>0?(
+    {rows.length>0?(
      <div className="tablewrap">
       <table>
        <thead>
@@ -82,11 +114,9 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
         </tr>
        </thead>
        <tbody>
-        {promos.map(p=>{
-         const start=p.startsOn.toISOString().slice(0,10);
-         const end=p.endsOn.toISOString().slice(0,10);
-         const label=!p.active?"Desactivada":today<start?"Programada":today>end?"Finalizada":"Vigente";
-         const cls=!p.active?"EXHAUSTED":today<start?"REVIEW":today>end?"BLOCKED":"AVAILABLE";
+        {rows.map(({p,start,end,statusKey})=>{
+         const label=statusKey==="inactive"?"Desactivada":statusKey==="scheduled"?"Programada":statusKey==="ended"?"Finalizada":"Vigente";
+         const cls=statusKey==="inactive"?"EXHAUSTED":statusKey==="scheduled"?"REVIEW":statusKey==="ended"?"BLOCKED":"AVAILABLE";
          return (
           <tr key={p.id}>
            <td><strong>{p.name}</strong></td>
@@ -101,12 +131,11 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
            <td className="mono">{start} — {end}</td>
            <td><span className={"status "+cls}>{label}</span></td>
            <td>
-            {p.active&&(
-             <form action={disablePromotion}>
-              <input type="hidden" name="id" value={p.id}/>
-              <button className="secondary">Desactivar</button>
-             </form>
-            )}
+            <form action={disablePromotion}>
+             <input type="hidden" name="id" value={p.id}/>
+             <input type="hidden" name="active" value={p.active?"no":"yes"}/>
+             <button className="secondary">{p.active?"Desactivar":"Reactivar"}</button>
+            </form>
            </td>
           </tr>
          );

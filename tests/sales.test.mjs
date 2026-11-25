@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {priceLine,bestPromotion,paymentAmounts,quotePromotion,eligiblePromotions,paymentBreakdown} from "../src/domain/sales.mjs";
+import {priceLine,bestPromotion,paymentAmounts,quotePromotion,quoteMultiLotPromotions,eligiblePromotions,paymentBreakdown} from "../src/domain/sales.mjs";
 test("precio exacto por peso y descuento",()=>{
  assert.deepEqual(priceLine(123456n,125n,2000),{subtotal:15432n,total:12346n});
  assert.throws(()=>priceLine(10n,0n));assert.throws(()=>priceLine(10n,1000n,10000));
@@ -43,4 +43,20 @@ test("pagos mixtos separan efectivo, vuelto y electrónicos",()=>{
  assert.throws(()=>paymentBreakdown(1000n,"MIXED",null,{debitCents:1000n}));
  assert.equal(paymentBreakdown(1000n,"MIXED",null,{debitCents:600n,transferCents:400n}).changeCents,null);
  assert.equal(paymentBreakdown(1000n,"TRANSFER",null).transferCents,1000n);
+});
+
+test("quoteMultiLotPromotions combines product-wide NxM across multiple lots without combining lot-specific promos",()=>{
+ const prodBundle={id:"b",name:"3x2 multi",active:true,productId:"p",lotId:null,expiryWithinDays:null,discountBps:0,buyUnits:3,payUnits:2};
+ const q=quoteMultiLotPromotions([
+  {productId:"p",unit:"UNIT",unitPrice:1000n,quantity:2000n,promotions:[prodBundle]},
+  {productId:"p",unit:"UNIT",unitPrice:1000n,quantity:1000n,promotions:[prodBundle]},
+ ]);
+ assert.equal(q.reduce((a,r)=>a+r.total,0n),2000n);
+ assert.ok(q.every(r=>r.promotionId==="b"));
+ const lotBundle={...prodBundle,id:"bl",lotId:"lot1"};
+ const ql=quoteMultiLotPromotions([
+  {productId:"p",unit:"UNIT",unitPrice:1000n,quantity:2000n,promotions:[lotBundle]},
+  {productId:"p",unit:"UNIT",unitPrice:1000n,quantity:1000n,promotions:[]},
+ ]);
+ assert.equal(ql.reduce((a,r)=>a+r.total,0n),3000n);
 });

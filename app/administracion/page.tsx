@@ -71,6 +71,14 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       <article className="om-list-card" key={b.id}>
        <span className="om-kicker">Sucursal</span>
        <strong style={{fontSize:16}}>{b.name}</strong>
+       <Operation title={"Renombrar · "+b.name} trigger="Renombrar" variant="secondary">
+        <form action={adminAction} className="fields">
+         <input type="hidden" name="kind" value="RENAME_BRANCH"/>
+         <input type="hidden" name="branchId" value={b.id}/>
+         <Field label="Nombre"><input name="name" defaultValue={b.name} required maxLength={100}/></Field>
+         <button>Guardar nombre</button>
+        </form>
+       </Operation>
       </article>
      ))}
     </div>
@@ -107,6 +115,15 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
              </select>
              <button name="kind" value="ROLE">Cambiar rol y cerrar sesiones</button>
              <button name="kind" value="REVOKE" className="secondary">Revocar acceso a este comercio</button>
+            </form>
+            <hr style={{border:0,borderTop:"1px solid var(--line)",margin:"14px 0"}}/>
+            <form action={adminAction} className="fields">
+             <input type="hidden" name="kind" value="RESET_PASSWORD"/>
+             <input type="hidden" name="userId" value={m.userId}/>
+             <Field label="Nueva contraseña (mín. 12 caracteres)">
+              <input name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required/>
+             </Field>
+             <button className="secondary">Restablecer contraseña y cerrar sesiones</button>
             </form>
            </Operation>
           )}

@@ -139,6 +139,10 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
         <button>Registrar pago</button>
        </form>
       </Operation>
+      <a className="actionlink secondarylink" href={"/api/export?"+new URLSearchParams({type:"finanzas",from,to}).toString()}>
+       <Icon name="layers" size={15}/>
+       <span>Exportar CSV</span>
+      </a>
      </>
     }
    />

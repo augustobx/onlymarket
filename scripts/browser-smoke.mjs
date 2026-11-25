@@ -158,6 +158,7 @@ try {
 
   await page.getByRole("link", { name: "Ver / imprimir" }).first().click();
   await page.getByRole("heading", { name: "Comprobante interno" }).waitFor();
+  await page.getByLabel("Ancho de impresora").selectOption("58");
   await page.getByRole("button", { name: "Imprimir comprobante" }).waitFor();
 
   await page.goto(tenantBase + "/finanzas");
@@ -371,6 +372,7 @@ try {
   await page.getByLabel("Tipo de comercio").selectOption("KIOSK");
   await page.getByLabel("Prefijo EAN de peso (2 dígitos, opcional)").fill("20");
   await page.getByLabel("Pesos de compra neta por punto").fill("100");
+  await page.getByLabel("Valor por punto canjeado ($)").fill("10");
   await page.getByLabel("Descuento socios (%)").fill("5");
   await page.getByRole("button", { name: "Guardar configuración" }).click();
   await page.getByRole("status").waitFor();
@@ -437,11 +439,119 @@ try {
   await page.goto(tenantBase + "/clientes");
   assert.match(await page.getByRole("row").filter({ hasText: "Socio smoke" }).innerText(), /39/);
 
+  // Phase 1 checks: FEFO auto-allocation across two lots + quickAccess + parked sale + weighed EAN label + filters
+  const fefoProd = await db.product.create({
+    data: { tenantId: tenant.id, sku: "SMOKE-FEFO", name: "Jugo FEFO smoke", barcode: "7790000001112", unit: "UNIT", sector: "GROCERY", salePriceCents: 120000n, quickAccess: true },
+  });
+  const fefoSoon = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
+  const fefoLate = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+  await receiveLot(db, scope, { branchId: lot.branchId, supplierId: supplier.id, productId: fefoProd.id, code: "FEFO-SOON", quantity: "1", cost: "600", requestKey: randomUUID(), expiresOn: fefoSoon, invoiceRef: "FEFO-1" });
+  await receiveLot(db, scope, { branchId: lot.branchId, supplierId: supplier.id, productId: fefoProd.id, code: "FEFO-LATE", quantity: "1", cost: "600", requestKey: randomUUID(), expiresOn: fefoLate, invoiceRef: "FEFO-2" });
+
+  await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: /Jugo FEFO smoke/ }).waitFor();
+  const fefoScan = page.getByLabel("Buscar / escanear código");
+  await page.getByLabel("Escaneo rápido").check();
+  await fefoScan.fill("7790000001112");
+  await fefoScan.press("Enter");
+  await fefoScan.fill("7790000001112");
+  await fefoScan.press("Enter");
+  await page.getByRole("button", { name: "Pausar venta" }).click();
+  await page.getByRole("button", { name: "Retomar" }).first().click();
+  await page.getByRole("button", { name: "Transferencia", exact: true }).click();
+  await page.getByRole("button", { name: "Confirmar venta" }).click();
+  await page.getByRole("status").filter({ hasText: "Venta registrada" }).waitFor();
+  assert.equal((await db.lot.findFirstOrThrow({ where: { tenantId: tenant.id, code: "FEFO-SOON" } })).quantityMilli, 0n);
+  assert.equal((await db.lot.findFirstOrThrow({ where: { tenantId: tenant.id, code: "FEFO-LATE" } })).quantityMilli, 0n);
+
+  const weightLot = await db.lot.findFirstOrThrow({ where: { tenantId: tenant.id, code: "WEIGHT" } });
+  await page.goto(tenantBase + "/etiquetas/" + weightLot.id);
+  await page.getByLabel("Peso por etiqueta (kg)").fill("0.750");
+  await page.getByRole("img", { name: "EAN " + digits + check }).waitFor();
+  await page.getByLabel("Modo cartel de góndola").check();
+  await page.getByText("Cartel de góndola · Precio de referencia").first().waitFor();
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  await page.goto(tenantBase + `/ventas?from=${todayStr}&to=${todayStr}`);
+  await page.getByRole("heading", { name: "Ventas y anulaciones" }).waitFor();
+  await page.goto(tenantBase + "/inventario?state=AVAILABLE");
+  await page.getByRole("heading", { name: "Compras y recepción" }).waitFor();
+
+  // Phase 2 checks: Verdulería workstation, Proveedores account balance, and authenticated CSV exports
+  await page.goto(tenantBase + "/verduleria");
+  await page.getByRole("heading", { name: "Estación de verdulería y frescos" }).waitFor();
+  await page.getByRole("button", { name: "Inspeccionar" }).first().click();
+  await page.getByLabel("Observación de frescura").fill("Frescura verificada en smoke");
+  await page.getByRole("button", { name: "Confirmar inspección" }).click();
+  await page.getByRole("status").waitFor();
+
+  await page.goto(tenantBase + "/proveedores");
+  await page.getByRole("heading", { name: "Directorio de proveedores" }).waitFor();
+  await page.getByText("Saldo adeudado").waitFor();
+
+  const exportVentas = await page.evaluate(async url => {
+    const r = await fetch(url);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return {
+      status: r.status,
+      type: r.headers.get("content-type") ?? "",
+      bom: buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf,
+      text: new TextDecoder("utf-8").decode(buf.slice(3)),
+    };
+  }, `/api/export?type=ventas&from=${todayStr}&to=${todayStr}`);
+  assert.equal(exportVentas.status, 200);
+  assert.match(exportVentas.type, /text\/csv/);
+  assert.equal(exportVentas.bom, true);
+  assert.match(exportVentas.text, /^"Ticket";"Fecha AR"/);
+  const exportInformes = await page.evaluate(async url => {
+    const r = await fetch(url);
+    return { status: r.status, type: r.headers.get("content-type") ?? "" };
+  }, `/api/export?type=informes&from=${todayStr}&to=${todayStr}`);
+  assert.equal(exportInformes.status, 200);
+  const unauthExport = await httpGet("/api/export?type=ventas", { host: `${slug}.localhost:3000` });
+  assert.equal(unauthExport.status, 401);
+
+  // Phase 3 checks: point redemption in /clientes + /auditoria + auditoria CSV export
+  await page.goto(tenantBase + "/clientes");
+  await page.getByRole("row").filter({ hasText: "Socio smoke" }).getByRole("button", { name: "Canjear puntos" }).click();
+  await page.getByLabel("Puntos a canjear").fill("5");
+  await page.getByLabel("Motivo / premio").fill("Voucher smoke");
+  await page.getByRole("button", { name: "Registrar canje" }).click();
+  await page.getByRole("status").waitFor();
+  assert.match(await page.getByRole("row").filter({ hasText: "Socio smoke" }).first().innerText(), /34/);
+  assert.match(await page.getByRole("row").filter({ hasText: "Socio smoke" }).last().innerText(), /Voucher smoke/);
+
+  await page.goto(tenantBase + "/auditoria");
+  await page.getByRole("heading", { name: "Auditoría de cambios críticos" }).waitFor();
+  const exportAuditoria = await page.evaluate(async url => {
+    const r = await fetch(url);
+    return { status: r.status, type: r.headers.get("content-type") ?? "" };
+  }, `/api/export?type=auditoria&from=${todayStr}&to=${todayStr}`);
+  assert.equal(exportAuditoria.status, 200);
+
   await page.goto(tenantBase + "/pos");
   await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();
   await page.getByRole("heading", { name: "Abrir caja" }).waitFor();
+
+  // Phase 4 checks: printable shift closure receipt, purchase detail drawer, and CSV import template
+  await page.getByRole("link", { name: "Ver cierre" }).first().click();
+  await page.getByRole("heading", { name: "Comprobante de cierre de caja" }).waitFor();
+  await page.getByRole("button", { name: "Imprimir comprobante" }).waitFor();
+
+  await page.goto(tenantBase + "/inventario");
+  await page.getByRole("row").filter({ hasText: "V2-SMOKE-RECEIPT" }).getByRole("button", { name: "Ver detalle" }).click();
+  await page.getByText("V2-SMOKE-CHEESE").first().waitFor();
+
+  await page.goto(tenantBase + "/catalogo/importar");
+  await page.getByRole("link", { name: "Descargar plantilla CSV para Excel" }).waitFor();
+  const exportTemplate = await page.evaluate(async url => {
+    const r = await fetch(url);
+    return { status: r.status, text: await r.text() };
+  }, "/api/export?type=catalogo_plantilla");
+  assert.equal(exportTemplate.status, 200);
+  assert.match(exportTemplate.text, /sku/);
 
   // Keep session active briefly to verify cross-tenant session isolation BEFORE logging out
   const liveCookie = (await page.context().cookies(tenantBase)).find(c => c.name === "onlymarket_session");

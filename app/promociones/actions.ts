@@ -8,11 +8,12 @@ import {actionError} from "../../src/server/errors.mjs";
 import {decimal,dateInput,textField} from "../../src/domain/parse.mjs";
 import {authorizeSale,serial} from "../../src/server/sales.mjs";
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
-async function run(f:FormData,disable=false){
+async function run(f:FormData,toggle=false){
  const s=await requireSession();let error="";
+ const enable=toggle&&str(f,"active")==="yes";
  try{await serial(db,async (tx:Prisma.TransactionClient)=>{
   await authorizeSale(tx,s,["OWNER","MANAGER"]);
-  if(disable){const id=textField(str(f,"id"),"Promoción");await tx.promotion.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{active:false}});return;}
+  if(toggle){const id=textField(str(f,"id"),"Promoción");await tx.promotion.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{active:enable}});return;}
   const productId=textField(str(f,"productId"),"Producto"),lotId=textField(str(f,"lotId"),"Lote",128,true)||null;
   const name=textField(str(f,"name"),"Nombre"),kind=str(f,"kind")||"PERCENT";
   if(!["PERCENT","QUANTITY","BUNDLE"].includes(kind))throw new Error("Tipo inválido");
@@ -32,7 +33,7 @@ async function run(f:FormData,disable=false){
   await tx.promotion.create({data:{tenantId:s.tenantId,productId,lotId,name,discountBps:Number(discount),minimumMilli,buyUnits,payUnits,startsOn,endsOn,expiryWithinDays:days?Number(days):null}});
  });}catch(e){error=actionError(e,"No se pudo guardar");}
  revalidatePath("/pos");revalidatePath("/promociones");
- redirect("/promociones"+(error?"?error="+encodeURIComponent(error):"?ok="+(disable?"promo_disabled":"promo_created")));
+ redirect("/promociones"+(error?"?error="+encodeURIComponent(error):"?ok="+(toggle?(enable?"promo_enabled":"promo_disabled"):"promo_created")));
 }
 export async function createPromotion(f:FormData){await run(f);}
 export async function disablePromotion(f:FormData){await run(f,true);}

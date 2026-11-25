@@ -102,7 +102,7 @@ export default async function Page({
  const areas:[string,string,string,IconName][]=[
   ["Carnicería","Desposte de medias reses y cortes","/transformaciones?view=nueva&sector=BUTCHERY","beef"],
   ["Fiambrería","Fraccionamiento de piezas enteras","/transformaciones?view=nueva&sector=DELI","cheese"],
-  ["Verdulería","Control de frescura y descartes","/alertas?sector=PRODUCE","apple"],
+  ["Verdulería","Control de frescura y descartes","/verduleria","apple"],
  ];
 
  return (

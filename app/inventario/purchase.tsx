@@ -128,7 +128,16 @@ export default function Purchase({
             </td>
             <td><input aria-label={"Lote "+(i+1)} value={l.code} required onChange={e=>set(i,"code",e.target.value)}/></td>
             <td><input aria-label={"Cantidad "+(i+1)} value={l.quantity} required inputMode="decimal" onChange={e=>set(i,"quantity",e.target.value)}/></td>
-            <td><input aria-label={"Costo total "+(i+1)} value={l.cost} required inputMode="decimal" onChange={e=>set(i,"cost",e.target.value)}/></td>
+            <td>
+             <input aria-label={"Costo total "+(i+1)} value={l.cost} required inputMode="decimal" onChange={e=>set(i,"cost",e.target.value)}/>
+             {(()=>{
+              try{
+               const q=decimal(l.quantity,3,"Cantidad");
+               const c=decimal(l.cost,2,"Costo",{allowZero:true});
+               return q>0n?<small className="mono">Unit: $ {fmt((c*1000n)/q)}/{p?.unit==="KG"?"kg":"u."}</small>:null;
+              }catch{return null;}
+             })()}
+            </td>
             <td>
              <input
               aria-label={"Vencimiento "+(i+1)}

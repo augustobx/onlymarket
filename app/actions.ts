@@ -9,6 +9,7 @@ import {decimal,textField,localDay} from "../src/domain/parse.mjs";
 import {receiveLot} from "../src/server/receipts.mjs";
 import {templateLines} from "../src/domain/templates.mjs";
 import {transformLot} from "../src/server/transform.mjs";
+import {reviewLot} from "../src/server/lot-review.mjs";
 import type {Prisma} from "@prisma/client";
 
 const str=(f:FormData,k:string)=>typeof f.get(k)==="string"?String(f.get(k)):"";
@@ -42,8 +43,9 @@ export async function addProduct(f:FormData){
   if(unit!=="KG"&&unit!=="UNIT")throw new Error("Unidad inválida");
   if(sector!=="BUTCHERY"&&sector!=="DELI"&&sector!=="PRODUCE"&&sector!=="GROCERY"&&sector!=="OTHER")throw new Error("Sector inválido");
   const salePriceCents=decimal(str(f,"price"),2,"Precio",{allowZero:true});
+  const quickAccess=str(f,"quickAccess")==="yes";
   const alertDays=days(str(f,"alertDays"))!,freshnessDays=days(str(f,"freshnessDays"),true),openedLifeDays=days(str(f,"openedLifeDays"),true);
-  await db.$transaction(async tx=>{await authorize(tx,s);await tx.product.create({data:{tenantId:s.tenantId,sku,name,barcode,weightCode,unit,sector,salePriceCents,alertDays,freshnessDays,openedLifeDays}});},{isolationLevel:"Serializable"});
+  await db.$transaction(async tx=>{await authorize(tx,s);await tx.product.create({data:{tenantId:s.tenantId,sku,name,barcode,weightCode,unit,sector,salePriceCents,quickAccess,alertDays,freshnessDays,openedLifeDays}});},{isolationLevel:"Serializable"});
  },"Ya existe un producto con ese SKU, código de barras o PLU");
 }
 export async function addSupplier(f:FormData){
@@ -51,6 +53,14 @@ export async function addSupplier(f:FormData){
  await write("/proveedores","supplier_created",async()=>{
   const name=textField(str(f,"name"),"Nombre"),phone=textField(str(f,"phone"),"Teléfono",64,true)||null;
   await db.$transaction(async tx=>{await authorize(tx,s);await tx.supplier.create({data:{tenantId:s.tenantId,name,phone}});},{isolationLevel:"Serializable"});
+ });
+}
+export async function updateSupplier(f:FormData){
+ const s=await manager();
+ await write("/proveedores","supplier_updated",async()=>{
+  const id=textField(str(f,"id"),"Proveedor"),name=textField(str(f,"name"),"Nombre"),phone=textField(str(f,"phone"),"Teléfono",64,true)||null;
+  await db.$transaction(async tx=>{await authorize(tx,s);await tx.supplier.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,phone}});},{isolationLevel:"Serializable"});
+  revalidatePath("/inventario");revalidatePath("/finanzas");
  });
 }
 export async function receiveAction(f:FormData){
@@ -71,23 +81,8 @@ export async function transformAction(f:FormData){
 export async function reviewAction(f:FormData){
  const s=await manager();
  await write("/inventario","review",async()=>{
-  const reason=textField(str(f,"reason"),"Motivo",300),id=textField(str(f,"lotId"),"Lote"),decision=str(f,"decision");
-  if(!["AVAILABLE","BLOCKED","REVIEW"].includes(decision))throw new Error("Decisión inválida");
-  await db.$transaction(async tx=>{
-   await authorize(tx,s);
-   const lot=await tx.lot.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}},include:{product:true}});
-   if(!lot||lot.quantityMilli<=0n)throw new Error("Lote sin stock");
-   if(lot.status==="BLOCKED"&&decision!=="BLOCKED")throw new Error("Un lote bloqueado no se puede rehabilitar en esta versión");
-   if(decision==="AVAILABLE"){
-     if(lot.expiresOn&&lot.expiresOn.toISOString().slice(0,10)<=localDay())throw new Error("Lote vencido");
-     if(lot.product.sector==="PRODUCE"&&!lot.expiresOn&&lot.product.freshnessDays==null)throw new Error("Configurar plazo de revisión antes de liberar");
-   }
-   // Preserve null reviewAt for non-produce lots without freshness policy so transfers/cuts don't auto-expire into REVIEW in 24h.
-   const needsFreshnessSchedule=lot.product.sector==="PRODUCE"||lot.reviewAt!==null||lot.product.freshnessDays!==null;
-   const nextReviewAt=decision==="AVAILABLE"?(needsFreshnessSchedule?new Date(Date.now()+86400000):null):lot.reviewAt;
-   await tx.lot.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{status:decision as "AVAILABLE"|"BLOCKED"|"REVIEW",reviewAt:nextReviewAt}});
-   await tx.stockMovement.create({data:{tenantId:s.tenantId,lotId:id,actorId:s.actorUserId,kind:"ADJUSTMENT",deltaMilli:0n,deltaCostCents:0n,reason:"Revisión "+decision+": "+reason}});
-  },{isolationLevel:"Serializable"});
+  await reviewLot(db,s,{lotId:str(f,"lotId"),decision:str(f,"decision"),reason:str(f,"reason")});
+  revalidatePath("/alertas");revalidatePath("/pos");revalidatePath("/catalogo");revalidatePath("/verduleria");
  });
 }
 
@@ -97,15 +92,19 @@ export async function editProduct(f:FormData){
   const id=textField(str(f,"id"),"Producto"),name=textField(str(f,"name"),"Nombre"),sku=textField(str(f,"sku"),"SKU",64);
   const barcode=textField(str(f,"barcode"),"Código de barras",64,true)||null;
   const price=decimal(str(f,"price"),2,"Precio",{allowZero:true});
+  const rawSector=str(f,"sector");
+  if(rawSector&&!["BUTCHERY","DELI","PRODUCE","GROCERY","OTHER"].includes(rawSector))throw new Error("Sector inválido");
   const alertDays=days(str(f,"alertDays"))!,freshnessDays=days(str(f,"freshnessDays"),true),openedLifeDays=days(str(f,"openedLifeDays"),true);
   await db.$transaction(async tx=>{
     await authorize(tx,s);
     const p=await tx.product.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}}});if(!p)throw new Error("Producto inexistente");
+    const sector=(rawSector||p.sector) as "BUTCHERY"|"DELI"|"PRODUCE"|"GROCERY"|"OTHER";
+    const quickAccess=f.has("quickAccess")?str(f,"quickAccess")==="yes":p.quickAccess;
     const weightCode=str(f,"weightCode")||null;if(weightCode&&(p.unit!=="KG"||!/^\d{5}$/.test(weightCode)))throw new Error("PLU de peso: 5 dígitos y producto por kg");
-    const old={name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,price:p.salePriceCents.toString(),alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,active:p.active};
+    const old={name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,sector:p.sector,quickAccess:p.quickAccess,price:p.salePriceCents.toString(),alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,active:p.active};
     const active=str(f,"active")==="yes";
-    await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,sku,barcode,weightCode,salePriceCents:price,alertDays,freshnessDays,openedLifeDays,active}});
-    await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:id,actorId:s.actorUserId,previous:JSON.stringify(old),next:JSON.stringify({name,sku,barcode,weightCode,price:price.toString(),alertDays,freshnessDays,openedLifeDays,active})}});
+    await tx.product.update({where:{tenantId_id:{tenantId:s.tenantId,id}},data:{name,sku,barcode,weightCode,sector,quickAccess,salePriceCents:price,alertDays,freshnessDays,openedLifeDays,active}});
+    await tx.catalogChange.create({data:{tenantId:s.tenantId,productId:id,actorId:s.actorUserId,previous:JSON.stringify(old),next:JSON.stringify({name,sku,barcode,weightCode,sector,quickAccess,price:price.toString(),alertDays,freshnessDays,openedLifeDays,active})}});
   },{isolationLevel:"Serializable"});
   revalidatePath("/pos");revalidatePath("/inventario");
  },"Ya existe un producto con ese SKU, código de barras o PLU");

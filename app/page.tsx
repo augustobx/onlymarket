@@ -202,7 +202,10 @@ export default async function Home({searchParams}:{searchParams:Promise<{branch?
      <AttentionItem href={"/alertas?state=BLOCKED&"+branchQuery} label="Lotes bloqueados" hint="No aptos para vender en POS" count={bal.counts.BLOCKED} icon="alert" tone="bad"/>
      <AttentionItem href={"/catalogo?state=empty&"+branchQuery} label="Productos sin stock apto" hint="Artículos activos agotados" count={empty} icon="box" tone="bad"/>
      {showTransform(s.profile)&&(
-      <AttentionItem href="/transformaciones" label="Producción y frescos" hint="Mesa de desposte y fraccionamiento" icon="scale" tone="neutral"/>
+      <>
+       <AttentionItem href="/transformaciones" label="Producción y frescos" hint="Mesa de desposte y fraccionamiento" icon="scale" tone="neutral"/>
+       <AttentionItem href="/verduleria" label="Verdulería y frescos" hint="Inspección diaria y mermas" icon="apple" tone="neutral"/>
+      </>
      )}
     </SectionCard>
    </div>
@@ -246,6 +249,11 @@ export default async function Home({searchParams}:{searchParams:Promise<{branch?
              <span className={"status "+(sh.closedAt?"EXHAUSTED":"AVAILABLE")}>
               {sh.closedAt?"Cerrada":"Abierta"}
              </span>
+             {sh.closedAt&&(
+              <div style={{marginTop:4}}>
+               <Link className="om-link-chip" href={"/pos/cierre/"+sh.id}>Ver cierre</Link>
+              </div>
+             )}
             </td>
            </tr>
           ))}

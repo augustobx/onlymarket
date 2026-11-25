@@ -3,7 +3,7 @@ import {licenseActive} from "../domain/settings.mjs";
 import {createHash} from "node:crypto";
 import {decimal,textField,localDay} from "../domain/parse.mjs";
 import {consumeCost,classifyLot} from "../domain/inventory.mjs";
-import {eligiblePromotions,quotePromotion,paymentBreakdown,checked} from "../domain/sales.mjs";
+import {eligiblePromotions,quoteMultiLotPromotions,paymentBreakdown,checked} from "../domain/sales.mjs";
 const dayOnly=d=>d?.toISOString().slice(0,10)??null;
 const roles=["OWNER","MANAGER","CASHIER"];
 export async function authorizeSale(tx,s,allowed=roles){
@@ -72,13 +72,14 @@ export async function recordSale(prisma,s,input){
    if(!["AVAILABLE","EXPIRING"].includes(classifyLot({...info,today})))throw new Error("Lote no apto para venta");
    const costCents=consumeCost(lot.quantityMilli,lot.remainingCostCents,quantityMilli);
    const eligible=eligiblePromotions(promoDates,info,today);
-   const price=quotePromotion(lot.product.salePriceCents,quantityMilli,lot.product.unit,eligible);
-   items.push({lot,quantityMilli,costCents,price});
+   items.push({lot,quantityMilli,costCents,eligible});
   }
+  const lotQuotes=quoteMultiLotPromotions(items.map(i=>({productId:i.lot.productId,unit:i.lot.product.unit,unitPrice:i.lot.product.salePriceCents,quantity:i.quantityMilli,promotions:i.eligible})));
+  items.forEach((item,i)=>{item.price=lotQuotes[i];});
   const tenant=await tx.tenant.findUniqueOrThrow({where:{id:tenantId}});
   if(customerId&&!await tx.customer.findFirst({where:{tenantId,id:customerId,active:true}}))throw new Error("Cliente inválido");
   const combos=await tx.combo.findMany({where:{tenantId,active:true,startsOn:{lte:new Date(today+"T00:00:00Z")},endsOn:{gte:new Date(today+"T00:00:00Z")}}});
-  const quotes=basketQuote(items.map(i=>({productId:i.lot.productId,unit:i.lot.product.unit,unitPrice:i.lot.product.salePriceCents,quantity:i.quantityMilli,price:i.price})),combos,customerId?tenant.memberDiscountBps:0);
+  const quotes=basketQuote(items.map(i=>({productId:i.lot.productId,unit:i.lot.product.unit,unitPrice:i.lot.product.salePriceCents,quantity:i.quantityMilli,promotions:i.eligible,price:i.price})),combos,customerId?tenant.memberDiscountBps:0);
   items.forEach((item,i)=>{item.price=quotes[i];});
   const sum=fn=>checked(items.reduce((a,l)=>a+fn(l),0n));
   const totalCents=sum(l=>l.price.total);
