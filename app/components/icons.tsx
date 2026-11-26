@@ -5,7 +5,7 @@ export type IconName=
  |"search"|"plus"|"minus"|"trash"|"check"|"x"|"alert"|"clock"|"printer"|"barcode"|"users"|"building"
  |"shield"|"sun"|"moon"|"palette"|"chevronLeft"|"chevronRight"|"chevronDown"|"arrowUpRight"|"layers"
  |"sparkles"|"filter"|"sliders"|"refresh"|"logOut"|"user"|"packageCheck"|"beef"|"cheese"|"apple"
- |"shoppingBag"|"creditCard"|"banknote"|"landmark"|"store"|"info"|"menu";
+ |"shoppingBag"|"creditCard"|"banknote"|"landmark"|"store"|"info"|"menu"|"help";
 
 const paths:Record<IconName,string[]>={
  home:["M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
@@ -59,6 +59,7 @@ const paths:Record<IconName,string[]>={
  store:["M3 9 4.5 4h15L21 9","M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0","M4 11v9h16v-9","M9 20v-6h6v6"],
  info:["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M12 16v-4","M12 8h.01"],
  menu:["M4 6h16","M4 12h16","M4 18h16"],
+ help:["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3","M12 17h.01"],
 };
 
 export function Icon({name,size=18,className="",...rest}:{name:IconName;size?:number;className?:string}&SVGProps<SVGSVGElement>){

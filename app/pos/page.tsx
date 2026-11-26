@@ -12,6 +12,7 @@ import {Operation} from "../operations";
 import {Shell,Notice,Field,money} from "../ui";
 import {SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {ModuleHelpButton} from "../components/module-help";
 import {openAction,closeAction,cashMovementAction} from "./actions";
 import Cart from "./cart";
 
@@ -162,6 +163,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
     </div>
 
     <div className="v2-actions">
+     <ModuleHelpButton routeOverride="/pos" dark/>
      {shift&&(
       <>
        <Operation

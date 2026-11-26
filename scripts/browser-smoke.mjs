@@ -550,7 +550,20 @@ try {
   }, `/api/export?type=auditoria&from=${todayStr}&to=${todayStr}`);
   assert.equal(exportAuditoria.status, 200);
 
+  await page.goto(tenantBase + "/catalogo");
+  await page.getByRole("button", { name: "Ayuda: Productos e inventario" }).click();
+  await page.getByRole("dialog").getByRole("heading", { name: "Productos e inventario" }).waitFor();
+  await page.getByRole("dialog").getByRole("button", { name: "Entendido" }).click();
+  await page.getByRole("link", { name: "Centro de ayuda" }).click();
+  await page.getByRole("heading", { name: "Centro de ayuda y guías del sistema" }).waitFor();
+  await page.getByLabel("Buscar guía o tema").fill("arqueo");
+  await page.getByRole("heading", { name: "Terminal de caja" }).waitFor();
+  await visual("ayuda");
+
   await page.goto(tenantBase + "/pos");
+  await page.getByRole("button", { name: "Ayuda: Terminal de caja" }).click();
+  await page.getByRole("dialog").getByRole("heading", { name: "Terminal de caja" }).waitFor();
+  await page.getByRole("dialog").getByRole("button", { name: "Entendido" }).click();
   await page.getByRole("button", { name: "Realizar arqueo", exact: true }).click();
   await page.getByLabel("Efectivo contado ($)").fill("0");
   await page.getByRole("button", { name: "Cerrar caja" }).click();

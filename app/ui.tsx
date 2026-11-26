@@ -8,6 +8,7 @@ import {WorkspaceFrame} from "./navigation";
 import {PaletteSelector,DarkModeToggle} from "./theme/ThemeControls";
 import {Icon,type IconName} from "./components/icons";
 import {ToastTrigger} from "./components/toast";
+import {ModuleHelpButton} from "./components/module-help";
 
 export const sectors={BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",GROCERY:"Almacén",OTHER:"Otros"};
 export const states:Record<string,string>={AVAILABLE:"Disponible",EXPIRING:"Próximo a vencer",REVIEW:"Revisar calidad",BLOCKED:"Bloqueado",EXHAUSTED:"Agotado"};
@@ -65,6 +66,9 @@ export async function Shell({
    {href:"/administracion",label:"Sucursales y equipo",icon:"shield" as IconName},
    {href:"/configuracion",label:"Perfil del comercio",icon:"settings" as IconName},
   ]}]:[]),
+  {name:"Soporte",items:[
+   {href:"/ayuda",label:"Centro de ayuda",icon:"help" as IconName},
+  ]},
  ];
 
  const footer=(
@@ -100,6 +104,7 @@ export async function Shell({
       <Icon name="arrowUpRight" size={14}/>
      </Link>
     )}
+    <ModuleHelpButton/>
     <PaletteSelector/>
     <DarkModeToggle/>
     <Link href="/cuenta" className="userchip" title="Mi cuenta">
