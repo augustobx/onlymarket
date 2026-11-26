@@ -2,10 +2,12 @@ import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {localDay} from "../../src/domain/parse.mjs";
 import {classifyLot} from "../../src/domain/inventory.mjs";
+import {matchesSearch} from "../../src/domain/search.mjs";
 import {Operation} from "../operations";
-import {Shell,Field,Notice,amount,sectors} from "../ui";
+import {Shell,Field,Notice,amount,money,sectors} from "../ui";
 import {PageHeader,KpiCard,SectionCard,EmptyState} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import {targetAction} from "../stock/actions";
 
 export const dynamic="force-dynamic";
@@ -13,7 +15,7 @@ export const dynamic="force-dynamic";
 export default async function Page({
  searchParams,
 }:{
- searchParams:Promise<{ok?:string;error?:string;branch?:string;only?:string}>;
+ searchParams:Promise<{ok?:string;error?:string;branch?:string;only?:string;q?:string}>;
 }){
  const s=await requireSession();
  if(s.role==="CASHIER")return <Shell title="Reposición"/>;
@@ -28,7 +30,7 @@ export default async function Page({
    tx.stockTarget.findMany({where:{tenantId,product:{active:true},...(query.branch?{branchId:query.branch}:{})},include:{product:true,branch:true},orderBy:[{branch:{name:"asc"}},{product:{name:"asc"}}]}),
    tx.lot.findMany({where:{tenantId,quantityMilli:{gt:0n},product:{active:true},...(query.branch?{branchId:query.branch}:{})},include:{product:true}}),
    tx.branch.findMany({where:{tenantId},orderBy:{name:"asc"}}),
-   tx.product.findMany({where:{tenantId,active:true},orderBy:{name:"asc"},select:{id:true,name:true,unit:true}}),
+   tx.product.findMany({where:{tenantId,active:true},orderBy:{name:"asc"},select:{id:true,name:true,sku:true,barcode:true,weightCode:true,unit:true,sector:true,salePriceCents:true}}),
   ] as const),
   {isolationLevel:"RepeatableRead"}
  );
@@ -58,7 +60,8 @@ export default async function Page({
   })
   .sort((a,b)=>Number(b.low)-Number(a.low));
 
- const visible=rows.filter(r=>query.only!=="low"||r.low);
+ const term=(query.q??"").trim().slice(0,120);
+ const visible=rows.filter(r=>(query.only!=="low"||r.low)&&matchesSearch(term,[r.product.name,r.product.sku,r.product.barcode??"",r.product.weightCode??"",sectors[r.product.sector as keyof typeof sectors]??"",r.branch.name]));
  const lowCount=rows.filter(r=>r.low).length;
 
  return (
@@ -86,9 +89,21 @@ export default async function Page({
           <select name="branchId">{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
          </Field>
          <Field label="Producto">
-          <select name="productId">
-           {products.map(p=><option key={p.id} value={p.id}>{p.name} · {p.unit==="KG"?"kg":"u."}</option>)}
-          </select>
+          <SearchPicker
+           name="productId"
+           ariaLabel="Producto"
+           required
+           placeholder="Buscar producto por nombre, SKU, EAN o sector..."
+           items={products.map((p):SearchPickerItem=>({
+            id:p.id,
+            title:p.name,
+            badge:sectors[p.sector as keyof typeof sectors],
+            subtitle:`SKU ${p.sku}${p.barcode?" · EAN "+p.barcode:""}${p.weightCode?" · PLU "+p.weightCode:""}`,
+            meta:p.unit==="KG"?"Por kilogramo":"Por unidad",
+            price:`${money(p.salePriceCents)}/${p.unit==="KG"?"kg":"u."}`,
+            searchText:`${p.name} ${p.sku} ${p.barcode??""} ${p.weightCode??""} ${sectors[p.sector as keyof typeof sectors]??""}`,
+           }))}
+          />
          </Field>
          <Field label="Stock mínimo"><input name="minimum" inputMode="decimal" required/></Field>
          <Field label="Stock objetivo"><input name="target" inputMode="decimal" required/></Field>
@@ -108,6 +123,10 @@ export default async function Page({
 
    <SectionCard title="Sugerencias de compra o traslado" subtitle="Se excluyen lotes retenidos o vencidos" icon="truck">
     <form method="get" className="v2-toolbar">
+     <label className="v2-search">
+      <Icon name="search" size={16}/>
+      <input name="q" aria-label="Buscar producto o sucursal" placeholder="Buscar por nombre, SKU, código o sucursal..." defaultValue={term}/>
+     </label>
      <select name="branch" aria-label="Sucursal" defaultValue={query.branch??""}>
       <option value="">Todas las sucursales</option>
       {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}

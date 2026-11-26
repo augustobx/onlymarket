@@ -6,9 +6,10 @@ import {decimal} from "../../src/domain/parse.mjs";
 import {consumeCost,planTransformation} from "../../src/domain/inventory.mjs";
 import {SectionCard,InfoCallout} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 
-type Product={id:string;name:string};
-type Lot={id:string;branchId:string;label:string;quantity:string;cost:string};
+type Product={id:string;name:string;sku?:string;barcode?:string|null;weightCode?:string|null;sector?:string;price?:string};
+type Lot={id:string;branchId:string;label:string;title?:string;subtitle?:string;stock?:string;price?:string;quantity:string;cost:string};
 type Row={disposition:string;productId:string;reason:string;quantity:string};
 type Template={id:string;name:string;lines:{disposition:string;productId:string;reason:string}[]};
 
@@ -94,16 +95,22 @@ export default function Editor({
        <div className="v2-fields">
         <label>
          Lote de origen
-         <select
-          aria-label="Lote de origen"
+         <SearchPicker
           name="sourceLotId"
+          ariaLabel="Lote de origen"
           required
+          placeholder="Buscar lote por producto, código o sucursal..."
+          items={lots.map((l):SearchPickerItem=>({
+           id:l.id,
+           title:l.title??l.label,
+           subtitle:l.subtitle,
+           stock:l.stock,
+           price:l.price,
+           searchText:l.label,
+          }))}
           value={source}
-          onChange={e=>{setSource(e.target.value);setInput("");}}
-         >
-          <option value="">Elegir lote</option>
-          {lots.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}
-         </select>
+          onChange={id=>{setSource(id);setInput("");}}
+         />
         </label>
         <label>
          Peso a transformar (kg)
@@ -139,20 +146,26 @@ export default function Editor({
            <tr key={i}>
             <td>
              <div className="v2-output-product">
-              <select
-               aria-label={"Producto "+(i+1)}
+              <SearchPicker
                name={"product"+i}
-               value={r.productId}
-               onChange={e=>{
-                set(i,"productId",e.target.value);
-                if(!r.reason)set(i,"reason",products.find(p=>p.id===e.target.value)?.name??"");
-               }}
-               disabled={r.disposition!=="STOCK"}
+               ariaLabel={"Producto "+(i+1)}
                required={r.disposition==="STOCK"}
-              >
-               <option value="">Elegir producto</option>
-               {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+               disabled={r.disposition!=="STOCK"}
+               placeholder="Buscar corte/producto por nombre o SKU..."
+               items={products.map((p):SearchPickerItem=>({
+                id:p.id,
+                title:p.name,
+                badge:p.sector,
+                subtitle:`${p.sku?"SKU "+p.sku:""}${p.barcode?" · EAN "+p.barcode:""}${p.weightCode?" · PLU "+p.weightCode:""}`,
+                price:p.price?`${p.price}/kg`:undefined,
+                searchText:`${p.name} ${p.sku??""} ${p.barcode??""} ${p.weightCode??""} ${p.sector??""}`,
+               }))}
+               value={r.productId}
+               onChange={id=>{
+                set(i,"productId",id);
+                if(!r.reason)set(i,"reason",products.find(p=>p.id===id)?.name??"");
+               }}
+              />
               <input
                aria-label={"Motivo / detalle "+(i+1)}
                name={"reason"+i}

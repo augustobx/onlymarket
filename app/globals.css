@@ -2460,6 +2460,195 @@ td small {
   color: #334155;
 }
 
+/* ================= RICH SEARCH PICKER ================= */
+.om-picker {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 220px;
+}
+
+.om-picker-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-surface-default);
+  color: var(--ink);
+  min-height: 40px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.om-picker-input:focus-within {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent);
+}
+
+.om-picker-input.is-disabled {
+  opacity: 0.6;
+  background: var(--bg-surface-subtle);
+}
+
+.om-picker-input input {
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  padding: 8px 0 !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+}
+
+.om-picker-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  min-height: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 0 !important;
+}
+
+.om-picker-clear:hover {
+  background: var(--bg-surface-subtle) !important;
+  color: var(--ink) !important;
+}
+
+.om-picker-chosen {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.om-picker-menu {
+  z-index: 9999;
+  background: var(--bg-surface-default);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.om-picker-opt {
+  width: 100%;
+  display: flex !important;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  padding: 9px 11px !important;
+  border-radius: 9px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-weight: 400 !important;
+  cursor: pointer;
+}
+
+.om-picker-opt:hover,
+.om-picker-opt.active {
+  background: var(--bg-surface-subtle) !important;
+  border-color: color-mix(in srgb, var(--color-brand) 35%, var(--line)) !important;
+}
+
+.om-picker-opt.selected {
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--bg-surface-default)) !important;
+  border-color: var(--color-brand) !important;
+}
+
+.om-picker-opt__main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.om-picker-opt__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.om-picker-opt__head strong {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.om-picker-opt__main small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.om-picker-opt__right {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.om-picker-opt__right strong {
+  font-size: 13px;
+  color: var(--color-brand);
+}
+
+.om-picker-opt__right small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.om-picker-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  color: var(--color-brand);
+}
+
+.om-picker-empty,
+.om-picker-foot {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.v2-pos-search-anchor {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.v2-pos-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-surface-default);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
 /* ================= RESPONSIVE BREAKPOINTS ================= */
 @media (max-width: 1150px) {
   .om-kpi-grid {

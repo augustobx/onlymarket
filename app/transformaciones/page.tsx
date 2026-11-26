@@ -6,7 +6,7 @@ import {deleteTemplate} from "../actions";
 import {classifyLot} from "../../src/domain/inventory.mjs";
 import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
-import {Shell,Notice,amount,money} from "../ui";
+import {Shell,Notice,amount,money,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState} from "../components/retail-ui";
 import {Icon,type IconName} from "../components/icons";
 import Editor from "./editor";
@@ -70,11 +70,15 @@ export default async function Page({
     />
     {eligible.length?(
      <Editor
-      products={products.map(p=>({id:p.id,name:p.name}))}
+      products={products.map(p=>({id:p.id,name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,sector:sectors[p.sector as keyof typeof sectors],price:money(p.salePriceCents)}))}
       lots={eligible.map(l=>({
        id:l.id,
        branchId:l.branchId,
        label:`${l.branch.name} · ${l.product.name} · ${l.code} · ${amount(l.quantityMilli,"KG")}`,
+       title:`${l.product.name} · Lote ${l.code}`,
+       subtitle:`SKU ${l.product.sku} · ${l.branch.name}${l.expiresOn?" · Vence "+l.expiresOn.toISOString().slice(0,10):""}`,
+       stock:amount(l.quantityMilli,"KG"),
+       price:money(l.remainingCostCents),
        quantity:l.quantityMilli.toString(),
        cost:l.remainingCostCents.toString(),
       }))}

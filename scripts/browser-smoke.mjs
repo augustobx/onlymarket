@@ -125,10 +125,19 @@ try {
   await page.getByRole("button", { name: "Crear proveedor" }).click();
   await page.getByRole("status").waitFor();
 
+  const pickSearch = async (container, label, query, optionText = query) => {
+    const input = container.getByRole("combobox", { name: label, exact: true });
+    await input.click();
+    await input.fill(query);
+    const listbox = page.getByRole("listbox", { name: label, exact: true });
+    await listbox.getByRole("option").filter({ hasText: optionText }).first().click();
+  };
+
   await page.goto(tenantBase + "/inventario");
   await visual("inventario");
   await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const receive = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
+  await pickSearch(receive, "Producto", "Yerba", "Yerba smoke");
   await receive.getByLabel("Código de lote").fill("SMOKE-LOT");
   await receive.getByLabel("Cantidad (kg o unidades)").fill("3");
   await receive.getByLabel("Costo total ($)").fill("4500");
@@ -141,6 +150,10 @@ try {
   await page.getByRole("heading", { name: "Nueva venta" }).waitFor();
   await visual("pos");
   await page.getByLabel("Escaneo rápido").uncheck();
+  await page.getByLabel("Buscar / escanear código").fill("yerb");
+  const posSuggest = page.getByRole("listbox", { name: "Coincidencias rápidas en POS" });
+  await posSuggest.getByRole("option").filter({ hasText: "SMOKE-001" }).first().waitFor();
+  assert.match(await posSuggest.innerText(), /2500,00/);
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
@@ -197,7 +210,7 @@ try {
   await page.getByRole("heading",{name:"Recibir mercadería",exact:true}).waitFor();
   await page.getByLabel("Número de comprobante").fill("V2-SMOKE-RECEIPT");
   await page.getByLabel("Total del comprobante ($)").fill("6000");
-  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await pickSearch(page, "Producto 1", "SMOKE-002", "Queso smoke");
   await page.getByLabel("Lote 1",{exact:true}).fill("V2-SMOKE-CHEESE");
   await page.getByLabel("Cantidad 1",{exact:true}).fill("2");
   await page.getByLabel("Costo total 1",{exact:true}).fill("6000");
@@ -211,12 +224,9 @@ try {
   assert.equal(cheeseLot.remainingCostCents,600000n);
   await page.goto(tenantBase + "/transformaciones?view=nueva&sector=DELI");
   await page.getByRole("heading",{name:"Mesa de fraccionamiento"}).waitFor();
-  const sourcePicker = page.getByRole("combobox",{name:"Lote de origen",exact:true});
-  await sourcePicker.waitFor({state:"visible"});
-  assert.equal(await sourcePicker.locator("option").evaluateAll((options,id)=>options.filter(o=>o.value===id).length,cheeseLot.id),1,"El lote recibido debe estar disponible para fraccionamiento");
-  await sourcePicker.selectOption(cheeseLot.id);
+  await pickSearch(page, "Lote de origen", "V2-SMOKE-CHEESE", "Queso smoke");
   await page.getByLabel("Peso a transformar (kg)").fill("1");
-  await page.getByLabel("Producto 1",{exact:true}).selectOption(cheese.id);
+  await pickSearch(page, "Producto 1", "SMOKE-002", "Queso smoke");
   await page.getByLabel("Motivo / detalle 1").fill("Porcionado de prueba");
   await page.getByLabel("Peso kg 1").fill("1");
   await visual("v2-produccion");
@@ -255,7 +265,7 @@ try {
   await page.getByRole("button", { name: "Configurar objetivo de stock", exact: true }).click();
   const config = page.locator("form").filter({ has: page.getByRole("button", { name: "Guardar objetivo", exact: true }) });
   await config.getByLabel("Sucursal").selectOption(lot.branchId);
-  await config.getByLabel("Producto").selectOption(lot.productId);
+  await pickSearch(config, "Producto", "SMOKE-001", "Yerba smoke");
   await config.getByLabel("Stock mínimo").fill("2");
   await config.getByLabel("Stock objetivo").fill("4");
   await config.getByRole("button", { name: "Guardar objetivo" }).click();
@@ -283,7 +293,7 @@ try {
   await page.getByRole("button", { name: "Recibir lote", exact: true }).click();
   const newReceipt = page.locator("form").filter({ has: page.getByRole("button", { name: "Registrar recepción", exact: true }) });
   await newReceipt.getByLabel("Sucursal").selectOption(lot.branchId);
-  await newReceipt.locator('select[name="productId"]').selectOption(lot.productId);
+  await pickSearch(newReceipt, "Producto", "4006381333931", "Yerba smoke");
   await newReceipt.getByLabel("Código de lote").fill("SMOKE-OFFER");
   await newReceipt.getByLabel("Cantidad (kg o unidades)").fill("3");
   await newReceipt.getByLabel("Costo total ($)").fill("4500");
@@ -295,7 +305,7 @@ try {
   await page.getByRole("button", { name: "+ Nueva promoción", exact: true }).click();
   const promoForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear promoción", exact: true }) });
   await promoForm.getByLabel("Nombre", { exact: true }).fill("3x2 smoke");
-  await promoForm.locator('select[name="productId"]').selectOption(lot.productId);
+  await pickSearch(promoForm, "Producto", "Yerba", "SKU SMOKE-001");
   await promoForm.getByLabel("Tipo de promoción").selectOption("BUNDLE");
   await promoForm.getByLabel("Unidades que lleva").fill("3");
   await promoForm.getByLabel("Unidades que paga").fill("2");
@@ -405,8 +415,8 @@ try {
   await page.getByRole("button", { name: "+ Nuevo combo", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Combo smoke");
   await page.getByLabel("Precio del combo ($)").fill("2500");
-  await page.locator('select[name="product0"]').selectOption(lot.productId);
-  await page.locator('select[name="product1"]').selectOption(extra.id);
+  await pickSearch(page, "Producto 1", "Yerba", "SKU SMOKE-001");
+  await pickSearch(page, "Producto 2", "Galletas", "SKU SMOKE-COMBO");
   await page.getByRole("button", { name: "Crear combo" }).click();
   await page.getByRole("status").waitFor();
 

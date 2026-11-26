@@ -28,7 +28,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{q?:stri
 
  const [lots,detail,members]=await Promise.all([
   db.lot.findMany({
-   where:{tenantId,...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}}]}:{})},
+   where:{tenantId,...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}},{product:{barcode:{contains:term,mode:"insensitive"}}},{product:{weightCode:{contains:term,mode:"insensitive"}}}]}:{})},
    include:{product:true,branch:true},
    orderBy:{receivedAt:"desc"},
    take:100,

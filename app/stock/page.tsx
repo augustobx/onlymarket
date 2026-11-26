@@ -34,7 +34,7 @@ export default async function Page({
      tenantId,
      ...(query.lot?{id:query.lot}:{}),
      ...(query.branch?{branchId:query.branch}:{}),
-     ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}}]}:{}),
+     ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}},{product:{barcode:{contains:term,mode:"insensitive"}}},{product:{weightCode:{contains:term,mode:"insensitive"}}}]}:{}),
     },
     include:{product:true,branch:true,movements:{orderBy:[{createdAt:"desc"},{id:"desc"}],take:1,select:{id:true}}},
     orderBy:[{product:{name:"asc"}},{receivedAt:"desc"}],

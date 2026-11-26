@@ -6,6 +6,7 @@ import {decodeWeight,encodeWeightEan13} from "../src/domain/barcode.mjs";
 import {licenseActive,showTransform} from "../src/domain/settings.mjs";
 import {resolveOkMessage} from "../src/domain/notices.mjs";
 import {buildCsv,csvCell,formatCentsCsv,formatMilliCsv} from "../src/domain/csv.mjs";
+import {normalizeSearch,matchesSearch} from "../src/domain/search.mjs";
 test("combos compare savings, preserve exact cents and avoid stacking",()=>{
  const row=(productId,unitPrice,quantity)=>({productId,unitPrice,quantity,unit:"UNIT",price:quotePromotion(unitPrice,quantity,"UNIT",[])});
  const rows=[row("a",1000n,2000n),row("b",1500n,2000n)];
@@ -64,4 +65,10 @@ test("CSV export neutralizes spreadsheet formulas and formats Argentine decimals
  const csv=buildCsv(["Producto","Total"],["Yerba;=1+1".split(";")]);
  assert.ok(csv.startsWith("\uFEFF"));
  assert.match(csv,/"Yerba";"'=1\+1"/);
+});
+test("multi-token accent-insensitive search matches across name, SKU, barcode and sector",()=>{
+ assert.equal(normalizeSearch("Jamón Crudo · Fiambrería"),"jamon crudo · fiambreria");
+ assert.equal(matchesSearch("jamon fia",["Jamón Crudo","DEL-001","Fiambrería"]),true);
+ assert.equal(matchesSearch("yer 3393",["Yerba smoke","SMOKE-001","4006381333931"]),true);
+ assert.equal(matchesSearch("yerba carniceria",["Yerba smoke","Almacén"]),false);
 });

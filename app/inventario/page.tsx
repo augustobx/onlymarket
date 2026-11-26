@@ -6,9 +6,10 @@ import {classifyLot} from "../../src/domain/inventory.mjs";
 import {localDay} from "../../src/domain/parse.mjs";
 import {receiveAction,reviewAction} from "../actions";
 import {Operation} from "../operations";
-import {Shell,Field,Notice,money,amount,states} from "../ui";
+import {Shell,Field,Notice,money,amount,states,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import {lotOperationAction} from "./actions";
 import Purchase from "./purchase";
 
@@ -36,7 +37,7 @@ export default async function Page({
     quantityMilli:{gt:0n},
     ...(query.lot?{id:query.lot}:{}),
     ...(query.branch?{branchId:query.branch}:{}),
-    ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}}]}:{}),
+    ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}},{product:{barcode:{contains:term,mode:"insensitive"}}},{product:{weightCode:{contains:term,mode:"insensitive"}}}]}:{}),
    },
    include:{product:true,branch:true,supplier:true},
    orderBy:[{expiresOn:"asc"},{receivedAt:"asc"}],
@@ -91,7 +92,7 @@ export default async function Page({
     />
     {products.length&&suppliers.length&&branches.length?(
      <Purchase
-      products={products.map(p=>({id:p.id,name:p.name,unit:p.unit,sector:p.sector}))}
+      products={products.map(p=>({id:p.id,name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,unit:p.unit,sector:p.sector,price:money(p.salePriceCents)}))}
       suppliers={suppliers.map(p=>({id:p.id,name:p.name}))}
       branches={branches.map(p=>({id:p.id,name:p.name}))}
       today={today}
@@ -146,7 +147,21 @@ export default async function Page({
           <select name="branchId">{branches.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
          </Field>
          <Field label="Producto">
-          <select name="productId">{products.map(x=><option key={x.id} value={x.id}>{x.name} ({x.unit})</option>)}</select>
+          <SearchPicker
+           name="productId"
+           ariaLabel="Producto"
+           required
+           placeholder="Buscar producto por nombre, SKU, EAN o sector..."
+           items={products.map((x):SearchPickerItem=>({
+            id:x.id,
+            title:x.name,
+            badge:sectors[x.sector as keyof typeof sectors],
+            subtitle:`SKU ${x.sku}${x.barcode?" · EAN "+x.barcode:""}${x.weightCode?" · PLU "+x.weightCode:""}`,
+            meta:x.unit==="KG"?"Venta por kilogramo":"Venta por unidad",
+            price:`${money(x.salePriceCents)}/${x.unit==="KG"?"kg":"u."}`,
+            searchText:`${x.name} ${x.sku} ${x.barcode??""} ${x.weightCode??""} ${sectors[x.sector as keyof typeof sectors]??""}`,
+           }))}
+          />
          </Field>
          <Field label="Proveedor">
           <select name="supplierId">{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>

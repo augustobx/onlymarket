@@ -3,9 +3,10 @@ import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
-import {Shell,Notice,Field,amount} from "../ui";
+import {Shell,Notice,Field,amount,money,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState,InfoCallout} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import RuleFields from "./rule-fields";
 import {createPromotion,disablePromotion} from "./actions";
 
@@ -55,15 +56,41 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       <form action={createPromotion} className="formgrid">
        <Field label="Nombre"><input name="name" required/></Field>
        <Field label="Producto">
-        <select name="productId" defaultValue={selected?.productId}>
-         {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <SearchPicker
+         name="productId"
+         ariaLabel="Producto"
+         required
+         defaultValue={selected?.productId??""}
+         placeholder="Buscar producto por nombre, SKU, EAN o sector..."
+         items={products.map((p):SearchPickerItem=>({
+          id:p.id,
+          title:p.name,
+          badge:sectors[p.sector as keyof typeof sectors],
+          subtitle:`SKU ${p.sku}${p.barcode?" · EAN "+p.barcode:""}${p.weightCode?" · PLU "+p.weightCode:""}`,
+          meta:p.unit==="KG"?"Por kilogramo":"Por unidad",
+          price:`${money(p.salePriceCents)}/${p.unit==="KG"?"kg":"u."}`,
+          searchText:`${p.name} ${p.sku} ${p.barcode??""} ${p.weightCode??""} ${sectors[p.sector as keyof typeof sectors]??""}`,
+         }))}
+        />
        </Field>
        <Field label="Lote (opcional)">
-        <select name="lotId" defaultValue={selected?.id??""}>
-         <option value="">Todos los lotes del producto</option>
-         {lots.map(l=><option key={l.id} value={l.id}>{l.product.name} · {l.code} · {l.branch.name}</option>)}
-        </select>
+        <SearchPicker
+         name="lotId"
+         ariaLabel="Lote (opcional)"
+         allowEmpty
+         emptyLabel="Todos los lotes del producto"
+         defaultValue={selected?.id??""}
+         placeholder="Buscar lote por código, producto o sucursal..."
+         items={lots.map((l):SearchPickerItem=>({
+          id:l.id,
+          title:`${l.product.name} · Lote ${l.code}`,
+          badge:l.branch.name,
+          subtitle:`SKU ${l.product.sku}${l.expiresOn?" · Vence "+l.expiresOn.toISOString().slice(0,10):""}`,
+          stock:amount(l.quantityMilli,l.product.unit),
+          price:money(l.product.salePriceCents),
+          searchText:`${l.product.name} ${l.product.sku} ${l.code} ${l.branch.name}`,
+         }))}
+        />
        </Field>
        <RuleFields/>
        <Field label="Vence dentro de (días, opcional)"><input type="number" name="expiryDays" min="1" max="365"/></Field>

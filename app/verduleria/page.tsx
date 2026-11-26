@@ -33,7 +33,7 @@ export default async function Page({
     quantityMilli:{gt:0n},
     product:{sector:"PRODUCE"},
     ...(query.branch?{branchId:query.branch}:{}),
-    ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}}]}:{}),
+    ...(term?{OR:[{code:{contains:term,mode:"insensitive"}},{product:{name:{contains:term,mode:"insensitive"}}},{product:{sku:{contains:term,mode:"insensitive"}}},{product:{barcode:{contains:term,mode:"insensitive"}}},{product:{weightCode:{contains:term,mode:"insensitive"}}}]}:{}),
    },
    include:{product:true,branch:true,supplier:true},
    orderBy:[{reviewAt:"asc"},{expiresOn:"asc"},{receivedAt:"asc"}],

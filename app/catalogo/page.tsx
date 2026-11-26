@@ -8,6 +8,7 @@ import {PageHeader,KpiCard,SectionCard,EmptyState,formatMoney,sectorIcons} from 
 import {Icon} from "../components/icons";
 import {localDay} from "../../src/domain/parse.mjs";
 import {classifyLot} from "../../src/domain/inventory.mjs";
+import {matchesSearch} from "../../src/domain/search.mjs";
 import {balances} from "../../src/server/product-balance";
 
 export const dynamic="force-dynamic";
@@ -64,7 +65,7 @@ export default async function Page({
 
  const filtered=rows.filter(
   r=>
-   (!term||[r.p.name,r.p.sku,r.p.barcode??""].some(v=>v.toLowerCase().includes(term.toLowerCase())))&&
+   matchesSearch(term,[r.p.name,r.p.sku,r.p.barcode??"",r.p.weightCode??"",sectors[r.p.sector as keyof typeof sectors]??""])&&
    (!query.sector||r.p.sector===query.sector)&&
    (!query.state||(query.state==="low"?r.p.active&&low.has(r.p.id):query.state==="empty"?r.p.active&&r.usable===0n:r.state===query.state))
  );

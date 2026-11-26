@@ -5,10 +5,13 @@ import {decimal} from "../../src/domain/parse.mjs";
 import {purchaseAction} from "./actions";
 import {SectionCard,InfoCallout} from "../components/retail-ui";
 import {Icon} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 
 type Option={id:string;name:string};
-type Product=Option&{unit:string;sector:string};
+type Product=Option&{sku?:string;barcode?:string|null;weightCode?:string|null;unit:string;sector:string;price?:string};
 type Line={productId:string;code:string;quantity:string;cost:string;expiresOn:string};
+
+const sectorLabels:Record<string,string>={BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",GROCERY:"Almacén",OTHER:"Otros"};
 
 const blank=():Line=>({productId:"",code:"",quantity:"",cost:"",expiresOn:""});
 const fmt=(n:bigint)=>{const a=n.toString().padStart(3,"0");return a.slice(0,-2)+","+a.slice(-2);};
@@ -121,10 +124,22 @@ export default function Purchase({
           return (
            <tr key={i}>
             <td>
-             <select aria-label={"Producto "+(i+1)} value={l.productId} required onChange={e=>set(i,"productId",e.target.value)}>
-              <option value="">Elegir producto</option>
-              {products.map(p=><option key={p.id} value={p.id}>{p.name} ({p.unit==="KG"?"kg":"u."})</option>)}
-             </select>
+             <SearchPicker
+              ariaLabel={"Producto "+(i+1)}
+              required
+              placeholder="Buscar producto, SKU o código..."
+              items={products.map((pr):SearchPickerItem=>({
+               id:pr.id,
+               title:pr.name,
+               badge:sectorLabels[pr.sector]??pr.sector,
+               subtitle:`${pr.sku?"SKU "+pr.sku:""}${pr.barcode?" · EAN "+pr.barcode:""}${pr.weightCode?" · PLU "+pr.weightCode:""}`,
+               meta:pr.unit==="KG"?"Por kilogramo":"Por unidad",
+               price:pr.price?`${pr.price}/${pr.unit==="KG"?"kg":"u."}`:undefined,
+               searchText:`${pr.name} ${pr.sku??""} ${pr.barcode??""} ${pr.weightCode??""} ${sectorLabels[pr.sector]??""}`,
+              }))}
+              value={l.productId}
+              onChange={id=>set(i,"productId",id)}
+             />
             </td>
             <td><input aria-label={"Lote "+(i+1)} value={l.code} required onChange={e=>set(i,"code",e.target.value)}/></td>
             <td><input aria-label={"Cantidad "+(i+1)} value={l.quantity} required inputMode="decimal" onChange={e=>set(i,"quantity",e.target.value)}/></td>

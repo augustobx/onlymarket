@@ -2,8 +2,9 @@ import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
-import {Shell,Field,Notice,money} from "../ui";
+import {Shell,Field,Notice,money,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState} from "../components/retail-ui";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import {comboAction} from "./actions";
 
 export const dynamic="force-dynamic";
@@ -43,10 +44,22 @@ export default async function Page({searchParams}:{searchParams:Promise<{ok?:str
        {Array.from({length:8},(_,i)=>(
         <div className="formgrid" key={i}>
          <Field label={"Producto "+(i+1)}>
-          <select name={"product"+i} required={i<2}>
-           <option value="">Elegir</option>
-           {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchPicker
+           name={"product"+i}
+           ariaLabel={"Producto "+(i+1)}
+           required={i<2}
+           allowEmpty={i>=2}
+           emptyLabel="Sin producto"
+           placeholder="Buscar artículo por nombre, SKU, EAN o sector..."
+           items={products.map((p):SearchPickerItem=>({
+            id:p.id,
+            title:p.name,
+            badge:sectors[p.sector as keyof typeof sectors],
+            subtitle:`SKU ${p.sku}${p.barcode?" · EAN "+p.barcode:""}`,
+            price:`${money(p.salePriceCents)}/u.`,
+            searchText:`${p.name} ${p.sku} ${p.barcode??""} ${sectors[p.sector as keyof typeof sectors]??""}`,
+           }))}
+          />
          </Field>
          <Field label={"Unidades "+(i+1)}><input name={"units"+i} type="number" min="1" max="99" defaultValue="1"/></Field>
         </div>

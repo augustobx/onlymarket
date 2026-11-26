@@ -6,7 +6,9 @@ import {decimal} from "../../src/domain/parse.mjs";
 import {decodeWeight} from "../../src/domain/barcode.mjs";
 import {basketQuote} from "../../src/domain/combos.mjs";
 import {quoteMultiLotPromotions,paymentBreakdown} from "../../src/domain/sales.mjs";
+import {matchesSearch} from "../../src/domain/search.mjs";
 import {Icon,type IconName} from "../components/icons";
+import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 
 type Promo={id:string;name:string;discountBps:number;minimumMilli:string|null;buyUnits:number|null;payUnits:number|null};
 type Option={
@@ -88,6 +90,7 @@ export default function Cart({
  const scanRef=useRef<HTMLInputElement>(null);
  const quantityRef=useRef<HTMLInputElement>(null);
  const [fast,setFast]=useState(true);
+ const [scanOpen,setScanOpen]=useState(false);
  const [customerId,setCustomerId]=useState("");
  const [parked,setParked]=useState<ParkedSale[]>([]);
  const decoded=decodeWeight(search.trim(),weightPrefix);
@@ -137,14 +140,28 @@ export default function Cart({
   return index;
  },[lots]);
 
- const term=search.trim().toLowerCase();
+ const sectorLabels:Record<string,string>={GROCERY:"Almacén",BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",OTHER:"Otros"};
  const matches=useMemo(
   ()=>lots.filter(l=>
    decoded
     ?l.unit==="KG"&&l.weightCode===decoded.plu
-    :!term||[l.name,l.sku,l.barcode,l.code].some(v=>v?.toLowerCase().includes(term))
+    :matchesSearch(search,[l.name,l.sku,l.barcode??"",l.weightCode??"",l.code,sectorLabels[l.sector??""]??""])
   ),
-  [lots,term,decoded?.plu]
+  [lots,search,decoded?.plu]
+ );
+
+ const lotPickerItems=useMemo<SearchPickerItem[]>(
+  ()=>matches.map(l=>({
+   id:l.id,
+   title:l.name,
+   badge:l.promotions.length?"Oferta":l.quickAccess?"★ POS":(sectorLabels[l.sector??""]??undefined),
+   subtitle:`SKU ${l.sku}${l.barcode?" · EAN "+l.barcode:""}${l.weightCode?" · PLU "+l.weightCode:""} · Lote ${l.code}`,
+   meta:`${sectorLabels[l.sector??""]??"Producto"} · ${l.expiry?"Vence "+l.expiry:"Sin vencimiento"}`,
+   price:`${money(BigInt(l.price))}/${l.unit==="KG"?"kg":"u."}`,
+   stock:`Disp: ${fixed(BigInt(l.quantity),3).replace(".",",")} ${l.unit==="KG"?"kg":"u."}`,
+   searchText:[l.name,l.sku,l.barcode??"",l.weightCode??"",l.code,sectorLabels[l.sector??""]??""].join(" "),
+  })),
+  [matches]
  );
 
  const options=matches.slice(0,100);
@@ -413,17 +430,69 @@ export default function Cart({
    <div className="v2-posleft">
     <div className="om-pos-scan-card">
      <div className="v2-posscan">
-      <label>
-       <span>Buscar / escanear código</span>
-       <input
-        ref={scanRef}
-        value={search}
-        onChange={e=>{setSearch(e.target.value);setSelected("");setInfo("");}}
-        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();choose();}}}
-        placeholder="Escanear código EAN, PLU o buscar producto por nombre / SKU..."
-       />
-      </label>
-      <button type="button" className="secondary" onClick={choose}>
+      <div className="v2-pos-search-anchor">
+       <label>
+        <span>Buscar / escanear código</span>
+        <input
+         ref={scanRef}
+         value={search}
+         onFocus={()=>{if(search.trim())setScanOpen(true);}}
+         onBlur={()=>setTimeout(()=>setScanOpen(false),150)}
+         onChange={e=>{
+          const val=e.target.value;
+          setSearch(val);
+          setSelected("");
+          setInfo("");
+          setScanOpen(Boolean(val.trim()));
+         }}
+         onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setScanOpen(false);choose();}}}
+         placeholder="Escanear código EAN, PLU o buscar por nombre, SKU, lote o sector..."
+        />
+       </label>
+       {scanOpen&&search.trim()&&matches.length>0&&(
+        <div className="v2-pos-suggest" role="listbox" aria-label="Coincidencias rápidas en POS">
+         {lotPickerItems.slice(0,12).map((item,idx)=>{
+          const lot=matches[idx];
+          return (
+           <button
+            key={item.id}
+            type="button"
+            role="option"
+            aria-selected={selected===item.id}
+            className={"om-picker-opt"+(selected===item.id?" selected":"")}
+            onMouseDown={e=>{
+             e.preventDefault();
+             setScanOpen(false);
+             if(fast&&lot.unit==="UNIT"){
+              add(lot.id,"1");
+             }else{
+              setSelected(lot.id);
+              setSearch("");
+              setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):lot.unit==="KG"?"":"1");
+              setInfo(`Seleccionado: ${lot.name} · Lote ${lot.code}`);
+              quantityRef.current?.focus();
+             }
+            }}
+           >
+            <div className="om-picker-opt__main">
+             <div className="om-picker-opt__head">
+              <strong>{item.title}</strong>
+              {item.badge&&<span className="om-picker-badge">{item.badge}</span>}
+             </div>
+             {item.subtitle&&<small className="mono">{item.subtitle}</small>}
+             {item.meta&&<small>{item.meta}</small>}
+            </div>
+            <div className="om-picker-opt__right mono">
+             {item.price&&<strong>{item.price}</strong>}
+             {item.stock&&<small>{item.stock}</small>}
+            </div>
+           </button>
+          );
+         })}
+        </div>
+       )}
+      </div>
+      <button type="button" className="secondary" onClick={()=>{setScanOpen(false);choose();}}>
        <Icon name="search" size={16}/>
        <span>Buscar</span>
       </button>
@@ -444,20 +513,16 @@ export default function Cart({
      <div className="v2-pos-pick">
       <label>
        Producto y lote
-       <select
+       <SearchPicker
+        ariaLabel="Producto y lote"
+        placeholder={`Buscar entre ${matches.length} lotes por nombre, SKU, EAN o lote...`}
+        items={lotPickerItems}
         value={selected}
-        onChange={e=>{
-         setSelected(e.target.value);
-         setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):byId.get(e.target.value)?.unit==="KG"?"":"1");
+        onChange={id=>{
+         setSelected(id);
+         setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):byId.get(id)?.unit==="KG"?"":"1");
         }}
-       >
-        <option value="">Elegir lote ({options.length})</option>
-        {options.map(l=>(
-         <option key={l.id} value={l.id}>
-          {l.name} · {l.code} · {fixed(BigInt(l.quantity),3)} {l.unit==="KG"?"kg":"u."} · {l.expiry??"sin venc."}{l.promotions.length?" · Oferta":""}
-         </option>
-        ))}
-       </select>
+       />
       </label>
 
       <label>
