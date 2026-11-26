@@ -5,8 +5,6 @@ import {requireSession} from "../../src/server/auth";
 import {addProduct,editProduct,bulkPrice} from "../actions";
 import {Shell,Field,Notice,sectors,fixed,amount,states} from "../ui";
 import {PageHeader,KpiCard,SectionCard,EmptyState,formatMoney,sectorIcons} from "../components/retail-ui";
-import {showTransform} from "../../src/domain/settings.mjs";
-import {WorkflowRail} from "../components/workflow-rail";
 import {Icon} from "../components/icons";
 import {localDay} from "../../src/domain/parse.mjs";
 import {classifyLot} from "../../src/domain/inventory.mjs";
@@ -163,8 +161,6 @@ export default async function Page({
      </>
     }
    />
-
-   <WorkflowRail current="catalog" showProduction={showTransform(s.profile)}/>
 
    <div className="om-kpi-grid">
     <KpiCard label="Artículos en catálogo" value={products.length} hint="Incluye inactivos e insumos" icon="box" tone="brand"/>

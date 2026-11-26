@@ -9,7 +9,6 @@ import {Operation} from "../operations";
 import {Shell,Notice,amount,money,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState} from "../components/retail-ui";
 import {Icon,type IconName} from "../components/icons";
-import {WorkflowRail} from "../components/workflow-rail";
 import Editor from "./editor";
 
 export const dynamic="force-dynamic";
@@ -70,7 +69,6 @@ export default async function Page({
       </Link>
      }
     />
-    <WorkflowRail current="transform"/>
     {eligible.length?(
      <Editor
       products={products.map(p=>({id:p.id,name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,sector:sectors[p.sector as keyof typeof sectors],price:money(p.salePriceCents)}))}
@@ -127,8 +125,6 @@ export default async function Page({
      </Link>
     }
    />
-
-   <WorkflowRail current="transform"/>
 
    {pendingOutputs.length>0&&(
     <SectionCard

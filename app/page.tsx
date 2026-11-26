@@ -10,7 +10,6 @@ import {balances} from "../src/server/product-balance";
 import {Shell,sectors} from "./ui";
 import {PageHeader,KpiCard,SectionCard,AttentionItem,EmptyState,formatMoney,sectorIcons} from "./components/retail-ui";
 import {Icon} from "./components/icons";
-import {WorkflowRail} from "./components/workflow-rail";
 
 export const dynamic="force-dynamic";
 
@@ -137,8 +136,6 @@ export default async function Home({searchParams}:{searchParams:Promise<{branch?
      </>
     }
    />
-
-   <WorkflowRail current="catalog" showProduction={showTransform(s.profile)}/>
 
    <div className="om-kpi-grid">
     {manager?(

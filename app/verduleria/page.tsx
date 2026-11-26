@@ -8,7 +8,6 @@ import {Operation} from "../operations";
 import {Shell,Field,Notice,amount,money,states} from "../ui";
 import {PageHeader,KpiCard,SectionCard,EmptyState,InfoCallout,formatMoney} from "../components/retail-ui";
 import {Icon} from "../components/icons";
-import {WorkflowRail} from "../components/workflow-rail";
 import {reviewProduceAction,wasteProduceAction} from "./actions";
 
 export const dynamic="force-dynamic";
@@ -98,8 +97,6 @@ export default async function Page({
      </>
     }
    />
-
-   <WorkflowRail current="transform" showProduction/>
 
    <div className="om-kpi-grid">
     <KpiCard label="Lotes aptos para venta" value={usableRows.length} hint="Disponibles o próximos a vencer" icon="apple" tone="success"/>
