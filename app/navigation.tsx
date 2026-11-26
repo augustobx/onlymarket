@@ -4,7 +4,10 @@ import {usePathname} from "next/navigation";
 import {useEffect,useState,type ReactNode} from "react";
 import {Icon,type IconName} from "./components/icons";
 
-type Group={name:string;items:{href:string;label:string;icon:IconName}[]};
+type Group={name:string;pinned?:boolean;items:{href:string;label:string;icon:IconName}[]};
+
+const isItemActive=(pathname:string,href:string)=>
+ href==="/"?pathname==="/":pathname===href||pathname.startsWith(href+"/");
 
 export function WorkspaceFrame({
  brandHref,
@@ -27,6 +30,7 @@ export function WorkspaceFrame({
  const [mobileOpen,setMobileOpen]=useState(false);
  const [collapsed,setCollapsed]=useState(false);
  const [filter,setFilter]=useState("");
+ const [openGroups,setOpenGroups]=useState<Record<string,boolean>>({});
 
  const normalized=filter.trim().toLocaleLowerCase("es-AR");
  const visibleGroups=groups
@@ -35,12 +39,34 @@ export function WorkspaceFrame({
 
  useEffect(()=>{
   if(localStorage.getItem("nl-sidebar-plegado")==="1")setCollapsed(true);
+  try{
+   const saved=localStorage.getItem("om-nav-open-groups");
+   if(saved){
+    const parsed=JSON.parse(saved);
+    if(parsed&&typeof parsed==="object")setOpenGroups(parsed);
+   }
+  }catch{}
  },[]);
+
+ useEffect(()=>{
+  const match=groups.find(g=>g.items.some(i=>isItemActive(pathname,i.href)));
+  if(match&&!match.pinned){
+   setOpenGroups(prev=>prev[match.name]?prev:{...prev,[match.name]:true});
+  }
+ },[pathname,groups]);
 
  const toggleCollapse=()=>{
   setCollapsed(prev=>{
    const next=!prev;
    localStorage.setItem("nl-sidebar-plegado",next?"1":"0");
+   return next;
+  });
+ };
+
+ const toggleGroup=(name:string)=>{
+  setOpenGroups(prev=>{
+   const next={...prev,[name]:!prev[name]};
+   try{localStorage.setItem("om-nav-open-groups",JSON.stringify(next));}catch{}
    return next;
   });
  };
@@ -97,27 +123,43 @@ export function WorkspaceFrame({
        />
       </div>
      )}
-     {(collapsed?groups:visibleGroups).map(g=>(
-      <section key={g.name}>
-       <small>{g.name}</small>
-       {g.items.map(i=>{
-        const active=i.href==="/"?pathname==="/":pathname===i.href||pathname.startsWith(i.href+"/");
-        return (
-         <Link
-          key={i.href}
-          href={i.href}
-          aria-current={active?"page":undefined}
-          className={active?"active":""}
-          title={collapsed?i.label:undefined}
-          onClick={()=>{setMobileOpen(false);setFilter("");}}
+     {(collapsed?groups:visibleGroups).map(g=>{
+      const hasActive=g.items.some(i=>isItemActive(pathname,i.href));
+      const isExpanded=collapsed||Boolean(g.pinned)||Boolean(normalized)||Boolean(openGroups[g.name])||hasActive;
+      return (
+       <section key={g.name}>
+        {g.pinned||collapsed?(
+         <small>{g.name}</small>
+        ):(
+         <button
+          type="button"
+          className={`om-nav-group-btn${hasActive?" has-active":""}`}
+          aria-expanded={isExpanded}
+          onClick={()=>toggleGroup(g.name)}
          >
-          <Icon name={i.icon} size={17}/>
-          <span>{i.label}</span>
-         </Link>
-        );
-       })}
-      </section>
-     ))}
+          <span>{g.name}</span>
+          <Icon name={isExpanded?"chevronDown":"chevronRight"} size={13}/>
+         </button>
+        )}
+        {isExpanded&&g.items.map(i=>{
+         const active=isItemActive(pathname,i.href);
+         return (
+          <Link
+           key={i.href}
+           href={i.href}
+           aria-current={active?"page":undefined}
+           className={active?"active":""}
+           title={collapsed?i.label:undefined}
+           onClick={()=>{setMobileOpen(false);setFilter("");}}
+          >
+           <Icon name={i.icon} size={17}/>
+           <span>{i.label}</span>
+          </Link>
+         );
+        })}
+       </section>
+      );
+     })}
     </nav>
 
     <div className="sidefooter">{footer}</div>

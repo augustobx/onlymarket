@@ -506,6 +506,45 @@ button.secondary.active {
   color: var(--muted);
 }
 
+.om-nav-group-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px !important;
+  padding: 4px 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+.om-nav-group-btn:hover {
+  background: var(--bg-surface-subtle) !important;
+  color: var(--ink) !important;
+}
+
+.om-nav-group-btn.has-active {
+  color: var(--color-brand) !important;
+}
+
+.footer-link--help {
+  background: color-mix(in srgb, var(--color-brand) 9%, var(--bg-surface-default));
+  color: var(--color-brand) !important;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 25%, var(--line));
+}
+
+.footer-link--help:hover {
+  background: color-mix(in srgb, var(--color-brand) 16%, var(--bg-surface-default)) !important;
+}
+
 .workspace nav a {
   display: flex;
   align-items: center;

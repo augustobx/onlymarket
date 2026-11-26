@@ -89,45 +89,54 @@ export async function Shell({
    .slice(0,18);
  }
 
- const groups:{name:string;items:{href:string;label:string;icon:IconName}[]}[]=[
-  {name:"Operación diaria",items:[
+ const groups:{name:string;pinned?:boolean;items:{href:string;label:string;icon:IconName}[]}[]=[
+  {name:"Operación diaria",pinned:true,items:[
    ...(s.role!=="CASHIER"?[{href:"/",label:"Resumen",icon:"home" as IconName}]:[]),
    ...(s.role!=="INVENTORY"?[{href:"/pos",label:"Terminal de caja",icon:"cart" as IconName}]:[]),
    ...(s.role!=="CASHIER"?[{href:"/alertas",label:"Alertas",icon:"bell" as IconName}]:[]),
   ]},
-  ...(s.role!=="CASHIER"?[{name:"Ciclo de mercadería",items:[
-   {href:"/catalogo",label:"Productos e inventario",icon:"box" as IconName},
-   {href:"/proveedores",label:"Proveedores",icon:"building" as IconName},
-   {href:"/inventario",label:"Compras y recepción",icon:"truck" as IconName},
-   ...(showTransform(s.profile)?[
-    {href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale" as IconName},
-    {href:"/verduleria",label:"Verdulería y frescos",icon:"apple" as IconName},
-   ]:[]),
-   {href:"/stock",label:"Conteos y traslados",icon:"layers" as IconName},
-   {href:"/reposicion",label:"Reposición",icon:"packageCheck" as IconName},
-   {href:"/trazabilidad",label:"Trazabilidad",icon:"trace" as IconName},
-  ]}]:[]),
-  ...(manager?[{name:"Ventas y negocio",items:[
-   {href:"/promociones",label:"Promociones",icon:"tag" as IconName},
-   {href:"/combos",label:"Combos",icon:"sparkles" as IconName},
-   {href:"/clientes",label:"Clientes y socios",icon:"users" as IconName},
-   {href:"/ventas",label:"Ventas y anulaciones",icon:"receipt" as IconName},
-   {href:"/finanzas",label:"Finanzas",icon:"wallet" as IconName},
-   {href:"/informes",label:"Informes",icon:"chart" as IconName},
-  ]}]:[]),
-  {name:"Sistema y ayuda",items:[
-   ...(manager?[{href:"/auditoria",label:"Auditoría",icon:"shield" as IconName}]:[]),
-   ...(s.role==="OWNER"?[
-    {href:"/administracion",label:"Sucursales y equipo",icon:"shield" as IconName},
-    {href:"/configuracion",label:"Perfil del comercio",icon:"settings" as IconName},
-   ]:[]),
-   {href:"/ayuda",label:"Centro de ayuda",icon:"help" as IconName},
-  ]},
+  ...(s.role!=="CASHIER"?[
+   {name:"Stock y producción",items:[
+    {href:"/catalogo",label:"Productos e inventario",icon:"box" as IconName},
+    {href:"/inventario",label:"Compras y recepción",icon:"truck" as IconName},
+    ...(showTransform(s.profile)?[
+     {href:"/transformaciones",label:"Desposte y fraccionamiento",icon:"scale" as IconName},
+     {href:"/verduleria",label:"Verdulería y frescos",icon:"apple" as IconName},
+    ]:[]),
+   ]},
+   {name:"Control de depósito",items:[
+    {href:"/proveedores",label:"Proveedores",icon:"building" as IconName},
+    {href:"/stock",label:"Conteos y traslados",icon:"layers" as IconName},
+    {href:"/reposicion",label:"Reposición",icon:"packageCheck" as IconName},
+    {href:"/trazabilidad",label:"Trazabilidad",icon:"trace" as IconName},
+   ]},
+  ]:[]),
+  ...(manager?[
+   {name:"Mostrador y clientes",items:[
+    {href:"/ventas",label:"Ventas y anulaciones",icon:"receipt" as IconName},
+    {href:"/promociones",label:"Promociones",icon:"tag" as IconName},
+    {href:"/combos",label:"Combos",icon:"sparkles" as IconName},
+    {href:"/clientes",label:"Clientes y socios",icon:"users" as IconName},
+   ]},
+   {name:"Plata y administración",items:[
+    {href:"/finanzas",label:"Finanzas",icon:"wallet" as IconName},
+    {href:"/informes",label:"Informes",icon:"chart" as IconName},
+    {href:"/auditoria",label:"Auditoría",icon:"shield" as IconName},
+    ...(s.role==="OWNER"?[
+     {href:"/administracion",label:"Sucursales y equipo",icon:"building" as IconName},
+     {href:"/configuracion",label:"Perfil del comercio",icon:"settings" as IconName},
+    ]:[]),
+   ]},
+  ]:[]),
  ];
 
  const footer=(
   <>
-   <Link href="/cuenta" className="footer-link">
+   <Link href="/ayuda" className="footer-link footer-link--help" title="Centro de ayuda">
+    <Icon name="help" size={15}/>
+    <span>Centro de ayuda</span>
+   </Link>
+   <Link href="/cuenta" className="footer-link" title="Mi cuenta">
     <Icon name="user" size={15}/>
     <span>Mi cuenta</span>
    </Link>
