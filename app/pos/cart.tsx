@@ -1,6 +1,7 @@
 "use client";
 import {useState,useRef,useMemo,useEffect} from "react";
 import {useFormStatus} from "react-dom";
+import Link from "next/link";
 import {saleAction} from "./actions";
 import {decimal} from "../../src/domain/parse.mjs";
 import {decodeWeight} from "../../src/domain/barcode.mjs";
@@ -27,6 +28,18 @@ type Option={
  promotions:Promo[];
  expiry:string|null;
 };
+type CatalogHint={
+ id:string;
+ name:string;
+ sku:string;
+ barcode:string|null;
+ weightCode:string|null;
+ unit:string;
+ sector:string;
+ price:string;
+ hasBlockedInBranch:boolean;
+ otherBranches:{branchName:string;quantity:string}[];
+};
 type ParkedSale={
  id:string;
  savedAt:string;
@@ -43,6 +56,14 @@ const sectorTabs:[string,string,IconName][]=[
  ["OTHER","Otros","box"],
 ];
 
+const sectorLabels:Record<string,string>={
+ GROCERY:"Almacén",
+ BUTCHERY:"Carnicería",
+ DELI:"Fiambrería",
+ PRODUCE:"Verdulería",
+ OTHER:"Otros",
+};
+
 const fixed=(n:bigint,scale:number)=>{
  const a=n.toString().padStart(scale+1,"0");
  return a.slice(0,-scale)+"."+a.slice(-scale);
@@ -52,8 +73,8 @@ const money=(n:bigint)=>"$ "+fixed(n,2).replace(".",",");
 function Submit({disabled}:{disabled:boolean}){
  const {pending}=useFormStatus();
  return (
-  <button className="v2-charge" disabled={disabled||pending}>
-   <Icon name="check" size={18}/>
+  <button className="om-pos-charge" disabled={disabled||pending}>
+   <Icon name="check" size={19}/>
    <span>{pending?"Registrando venta...":"Confirmar venta"}</span>
   </button>
  );
@@ -61,6 +82,8 @@ function Submit({disabled}:{disabled:boolean}){
 
 export default function Cart({
  lots,
+ catalogHints=[],
+ branchName="",
  shiftId,
  requestKey,
  customers,
@@ -70,6 +93,8 @@ export default function Cart({
  combos,
 }:{
  lots:Option[];
+ catalogHints?:CatalogHint[];
+ branchName?:string;
  shiftId:string;
  requestKey:string;
  customers:{id:string;name:string;code:string;availablePoints?:string}[];
@@ -141,7 +166,6 @@ export default function Cart({
   return index;
  },[lots]);
 
- const sectorLabels:Record<string,string>={GROCERY:"Almacén",BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",OTHER:"Otros"};
  const matches=useMemo(
   ()=>lots.filter(l=>
    decoded
@@ -150,6 +174,25 @@ export default function Cart({
   ),
   [lots,search,decoded?.plu]
  );
+
+ const catalogMatches=useMemo(()=>{
+  if(!search.trim()||decoded)return [];
+  return catalogHints.filter(p=>
+   matchesSearch(search,[p.name,p.sku,p.barcode??"",p.weightCode??"",sectorLabels[p.sector]??p.sector])
+  ).slice(0,8);
+ },[catalogHints,search,decoded]);
+
+ const branchStockSummary=useMemo(()=>{
+  const branchesWithStock=new Set<string>();
+  let productsElsewhere=0;
+  for(const p of catalogHints){
+   if(p.otherBranches.length>0){
+    productsElsewhere++;
+    for(const ob of p.otherBranches)branchesWithStock.add(ob.branchName);
+   }
+  }
+  return {productsElsewhere,branches:[...branchesWithStock]};
+ },[catalogHints]);
 
  const lotPickerItems=useMemo<SearchPickerItem[]>(
   ()=>matches.map(l=>({
@@ -164,10 +207,6 @@ export default function Cart({
   })),
   [matches]
  );
-
- const options=matches.slice(0,100);
- const chosen=byId.get(selected);
- if(chosen&&!options.some(l=>l.id===chosen.id))options.unshift(chosen);
 
  function addProductFEFO(productId:string,quantityStr:string){
   try{
@@ -205,6 +244,18 @@ export default function Cart({
    setError(e instanceof Error?e.message:"Cantidad inválida");
   }
  }
+
+ const explainMissingHint=(hint:CatalogHint)=>{
+  setScanOpen(false);
+  if(hint.otherBranches.length>0){
+   const where=hint.otherBranches.map(b=>`${b.branchName} (${fixed(BigInt(b.quantity),hint.unit==="KG"?3:0).replace(/\.000$/,"")} ${hint.unit==="KG"?"kg":"u."})`).join(", ");
+   setError(`"${hint.name}" no tiene stock en ${branchName||"esta sucursal"}. Disponible en: ${where}.`);
+  }else if(hint.hasBlockedInBranch){
+   setError(`"${hint.name}" tiene lotes en ${branchName||"esta sucursal"}, pero están vencidos o en revisión.`);
+  }else{
+   setError(`"${hint.name}" existe en el catálogo, pero no tiene stock cargado en ninguna sucursal.`);
+  }
+ };
 
  const pickLotOrFast=(lot:Option,pref?:string)=>{
   if(fast&&lot.unit==="UNIT"){
@@ -301,6 +352,17 @@ export default function Cart({
    return;
   }
 
+  if(matches.length===0&&catalogMatches.length===1){
+   explainMissingHint(catalogMatches[0]);
+   return;
+  }
+  if(matches.length===0&&catalogMatches.length>1){
+   setScanOpen(true);
+   setError("");
+   setInfo(`Encontramos ${catalogMatches.length} artículos del catálogo sin stock disponible en ${branchName||"esta sucursal"}.`);
+   return;
+  }
+
   setSelected("");
   setError(
    exact.length>1
@@ -371,7 +433,10 @@ export default function Cart({
   promotionLabel:quotes[i].promotionLabel??null,
  }));
 
+ const subtotalSum=rows.reduce((a,r)=>a+r.subtotal,0n);
  const total=rows.reduce((a,r)=>a+r.total,0n);
+ const totalSavings=subtotalSum-total;
+
  let cash:bigint|null=null;
  try{cash=decimal(tendered,2,"Efectivo",{allowZero:true});}catch{}
 
@@ -406,7 +471,7 @@ export default function Cart({
   }
   return [...map.values()]
    .sort((a,b)=>Number(Boolean(b.quickAccess))-Number(Boolean(a.quickAccess)))
-   .slice(0,16);
+   .slice(0,36);
  },[lots,sectorFilter]);
 
  useEffect(()=>{
@@ -415,7 +480,7 @@ export default function Cart({
    if(document.querySelector("dialog[open]"))return;
    if(e.key==="F2"){e.preventDefault();scanRef.current?.focus();}
    else if(e.key==="F4"){e.preventDefault();quantityRef.current?.focus();}
-   else if(e.key==="F12"){e.preventDefault();document.querySelector<HTMLButtonElement>(".v2-charge:not(:disabled)")?.focus();}
+   else if(e.key==="F12"){e.preventDefault();document.querySelector<HTMLButtonElement>(".om-pos-charge:not(:disabled)")?.focus();}
   };
   window.addEventListener("keydown",key);
   return ()=>window.removeEventListener("keydown",key);
@@ -458,7 +523,6 @@ export default function Cart({
   const nextParked=rows.length
    ?[{id:String(Date.now()),savedAt:new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}),customerId,cart},...rest].slice(0,10)
    :rest;
-  // Keep only lots still present and clamp to available quantity
   const validCart:Record<string,string>={};
   for(const [lotId,qtyStr] of Object.entries(entry.cart)){
    const lot=byId.get(lotId);
@@ -475,255 +539,278 @@ export default function Cart({
  };
 
  const quickCashAmounts=useMemo(()=>{
-  const base=[100000n,200000n,500000n,1000000n,2000000n];
+  const base=[100000n,200000n,500000n,1000000n,2000000n,5000000n];
   return base.filter(v=>v>=total).slice(0,4);
  },[total]);
 
  return (
-  <section className="v2-posbody">
-   <div className="v2-posleft">
-    <div className="om-pos-scan-card">
-     <div className="v2-posscan">
+  <section className="om-pos-deck">
+   <div className="om-pos-catalog">
+    <div className="om-pos-searchbar">
+     <div className="om-pos-searchbar__top">
       <div className="v2-pos-search-anchor">
-       <label>
-        <span>Buscar / escanear código</span>
-        <input
-         ref={scanRef}
-         value={search}
-         onFocus={()=>{if(search.trim())setScanOpen(true);}}
-         onBlur={()=>setTimeout(()=>setScanOpen(false),150)}
-         onChange={e=>{
-          const val=e.target.value;
-          setSearch(val);
-          setSelected("");
-          setInfo("");
-          setError("");
-          setSuggestIndex(0);
-          setScanOpen(Boolean(val.trim()));
-         }}
-         onKeyDown={e=>{
-          const count=Math.min(12,matches.length);
-          if(e.key==="ArrowDown"&&count>0){
-           e.preventDefault();
-           if(!scanOpen)setScanOpen(true);
-           else setSuggestIndex(i=>Math.min(count-1,i+1));
-          }else if(e.key==="ArrowUp"&&scanOpen){
-           e.preventDefault();
-           setSuggestIndex(i=>Math.max(0,i-1));
-          }else if(e.key==="Escape"&&scanOpen){
-           e.preventDefault();
-           setScanOpen(false);
-          }else if(e.key==="Enter"){
-           e.preventDefault();
-           choose(true);
-          }
-         }}
-         placeholder="Escribí nombre, marca, SKU, PLU o escaneá código de barras..."
-        />
+       <label className="om-pos-searchfield">
+        <span className="om-sr-label">Buscar / escanear código</span>
+        <div className="om-pos-searchbox">
+         <Icon name="search" size={18}/>
+         <input
+          ref={scanRef}
+          value={search}
+          onFocus={()=>{if(search.trim())setScanOpen(true);}}
+          onBlur={()=>setTimeout(()=>setScanOpen(false),150)}
+          onChange={e=>{
+           const val=e.target.value;
+           setSearch(val);
+           setSelected("");
+           setInfo("");
+           setError("");
+           setSuggestIndex(0);
+           setScanOpen(Boolean(val.trim()));
+          }}
+          onKeyDown={e=>{
+           const count=Math.min(12,matches.length);
+           if(e.key==="ArrowDown"&&count>0){
+            e.preventDefault();
+            if(!scanOpen)setScanOpen(true);
+            else setSuggestIndex(i=>Math.min(count-1,i+1));
+           }else if(e.key==="ArrowUp"&&scanOpen){
+            e.preventDefault();
+            setSuggestIndex(i=>Math.max(0,i-1));
+           }else if(e.key==="Escape"&&scanOpen){
+            e.preventDefault();
+            setScanOpen(false);
+           }else if(e.key==="Enter"){
+            e.preventDefault();
+            choose(true);
+           }
+          }}
+          placeholder="Buscar producto por nombre, SKU, PLU o escanear código..."
+         />
+         {search&&(
+          <button
+           type="button"
+           className="om-picker-clear"
+           aria-label="Limpiar búsqueda"
+           onMouseDown={e=>{e.preventDefault();setSearch("");setScanOpen(false);scanRef.current?.focus();}}
+          >
+           <Icon name="x" size={15}/>
+          </button>
+         )}
+        </div>
        </label>
+
        {scanOpen&&search.trim()&&(
         <div className="v2-pos-suggest" role="listbox" aria-label="Coincidencias rápidas en POS">
-         {lotPickerItems.length>0?(
-          lotPickerItems.slice(0,12).map((item,idx)=>{
-           const lot=matches[idx];
-           const isActive=idx===suggestIndex;
-           return (
-            <button
-             key={item.id}
-             type="button"
-             role="option"
-             aria-selected={selected===item.id||isActive}
-             className={"om-picker-opt"+(isActive?" active":"")+(selected===item.id?" selected":"")}
-             onMouseEnter={()=>setSuggestIndex(idx)}
-             onMouseDown={e=>{
-              e.preventDefault();
-              pickLotOrFast(lot);
-             }}
-            >
-             <div className="om-picker-opt__main">
-              <div className="om-picker-opt__head">
-               <strong>{item.title}</strong>
-               {item.badge&&<span className="om-picker-badge">{item.badge}</span>}
-              </div>
-              {item.subtitle&&<small className="mono">{item.subtitle}</small>}
-              {item.meta&&<small>{item.meta}</small>}
+         {lotPickerItems.slice(0,12).map((item,idx)=>{
+          const lot=matches[idx];
+          const isActive=idx===suggestIndex;
+          return (
+           <button
+            key={item.id}
+            type="button"
+            role="option"
+            aria-selected={selected===item.id||isActive}
+            className={"om-picker-opt"+(isActive?" active":"")+(selected===item.id?" selected":"")}
+            onMouseEnter={()=>setSuggestIndex(idx)}
+            onMouseDown={e=>{
+             e.preventDefault();
+             pickLotOrFast(lot);
+            }}
+           >
+            <div className="om-picker-opt__main">
+             <div className="om-picker-opt__head">
+              <strong>{item.title}</strong>
+              {item.badge&&<span className="om-picker-badge">{item.badge}</span>}
              </div>
-             <div className="om-picker-opt__right mono">
-              {item.price&&<strong>{item.price}</strong>}
-              {item.stock&&<small>{item.stock}</small>}
+             {item.subtitle&&<small className="mono">{item.subtitle}</small>}
+             {item.meta&&<small>{item.meta}</small>}
+            </div>
+            <div className="om-picker-opt__right mono">
+             {item.price&&<strong>{item.price}</strong>}
+             {item.stock&&<small>{item.stock}</small>}
+            </div>
+           </button>
+          );
+         })}
+
+         {catalogMatches.map(hint=>{
+          const branchInfo=hint.otherBranches.length>0
+           ?"Disponible en: "+hint.otherBranches.map(b=>`${b.branchName} (${fixed(BigInt(b.quantity),hint.unit==="KG"?3:0).replace(/\.000$/,"")} ${hint.unit==="KG"?"kg":"u."})`).join(", ")
+           :hint.hasBlockedInBranch
+            ?`En ${branchName||"esta sucursal"} solo hay lotes vencidos o en revisión`
+            :"Sin stock ingresado en ninguna sucursal";
+          return (
+           <button
+            key={"hint-"+hint.id}
+            type="button"
+            role="option"
+            aria-selected={false}
+            className="om-picker-opt om-picker-opt--muted"
+            onMouseDown={e=>{
+             e.preventDefault();
+             explainMissingHint(hint);
+            }}
+           >
+            <div className="om-picker-opt__main">
+             <div className="om-picker-opt__head">
+              <strong>{hint.name}</strong>
+              <span className="om-picker-badge om-picker-badge--warn">
+               {hint.otherBranches.length>0?"En otra sucursal":`Sin stock en ${branchName||"sucursal"}`}
+              </span>
              </div>
-            </button>
-           );
-          })
-         ):(
-          <div className="om-picker-empty">Sin productos disponibles para &ldquo;{search}&rdquo;</div>
+             <small className="mono">SKU {hint.sku}{hint.barcode?" · EAN "+hint.barcode:""}</small>
+             <small>{branchInfo}</small>
+            </div>
+            <div className="om-picker-opt__right mono">
+             <strong>{money(BigInt(hint.price))}/{hint.unit==="KG"?"kg":"u."}</strong>
+             <small>0 disp.</small>
+            </div>
+           </button>
+          );
+         })}
+
+         {lotPickerItems.length===0&&catalogMatches.length===0&&(
+          <div className="om-picker-empty">Sin coincidencias en catálogo para &ldquo;{search}&rdquo;</div>
          )}
         </div>
        )}
       </div>
-      <button type="button" className="secondary" onMouseDown={e=>e.preventDefault()} onClick={()=>choose(false)}>
-       <Icon name="search" size={16}/>
-       <span>Buscar</span>
+
+      <button type="button" className="secondary om-pos-searchbtn" onMouseDown={e=>e.preventDefault()} onClick={()=>choose(false)}>
+       Buscar
       </button>
      </div>
 
-     <div className="om-pos-scan-bar">
-      <label className="scanmode">
+     <div className="om-pos-searchbar__meta">
+      <label className="om-pos-fasttoggle">
        <input type="checkbox" checked={fast} onChange={e=>{setFast(e.target.checked);scanRef.current?.focus();}}/>
-       <span>Escaneo rápido (1 clic / Enter suma por FEFO)</span>
+       <span>Escaneo rápido</span>
+       <small>1 clic / Enter suma por FEFO</small>
       </label>
       {weightPrefix&&(
-       <span className="status AVAILABLE">
-        Balanza {weightPrefix}
-       </span>
+       <span className="status AVAILABLE">Balanza {weightPrefix}</span>
       )}
      </div>
-
-     <div className="v2-pos-pick">
-      <label>
-       Lote específico (opcional)
-       <SearchPicker
-        ariaLabel="Producto y lote"
-        placeholder={`Elegir lote manual (${matches.length} disponibles)...`}
-        items={lotPickerItems}
-        value={selected}
-        onChange={id=>{
-         setSelected(id);
-         setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):byId.get(id)?.unit==="KG"?"":"1");
-        }}
-       />
-      </label>
-
-      <label>
-       Cantidad (kg o unidades)
-       <input
-        ref={quantityRef}
-        value={qty}
-        onChange={e=>setQty(e.target.value)}
-        inputMode="decimal"
-        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}
-       />
-      </label>
-
-      <button type="button" onClick={()=>add()}>
-       <Icon name="plus" size={16}/>
-       <span>Agregar</span>
-      </button>
-     </div>
-     {matches.length>100&&<small>Mostrando 100 de {matches.length} lotes. Refiná la búsqueda.</small>}
     </div>
 
     {error&&(
-     <p role="alert" className="error">
+     <p role="alert" className="error om-pos-alert">
       <Icon name="alert" size={16}/>
       <span>{error}</span>
      </p>
     )}
     {info&&!error&&(
-     <p role="status" className="notice">
+     <p role="status" className="notice om-pos-alert">
       <Icon name="info" size={16}/>
       <span>{info}</span>
      </p>
     )}
 
-    <section className="om-card">
-     <header className="om-card__head">
-      <div className="om-card__heading">
-       <span className="om-card__icon"><Icon name="shoppingBag" size={16}/></span>
-       <div>
-        <h2>Nueva venta</h2>
-        <p>{rows.length} líneas · asignación FEFO / lote confirmado</p>
-       </div>
-      </div>
-      <span className="status AVAILABLE">Venta directa</span>
-     </header>
+    <div className="om-pos-manual">
+     <div className="om-pos-manual__picker">
+      <SearchPicker
+       ariaLabel="Producto y lote"
+       placeholder={lots.length?`Buscar lote manual (${lots.length} lotes en ${branchName||"sucursal"})...`:"Sin lotes disponibles en esta sucursal"}
+       items={lotPickerItems}
+       value={selected}
+       onChange={id=>{
+        setSelected(id);
+        setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):byId.get(id)?.unit==="KG"?"":"1");
+       }}
+      />
+     </div>
+     <label className="om-pos-manual__qty">
+      <span className="om-sr-label">Cantidad (kg o unidades)</span>
+      <input
+       ref={quantityRef}
+       aria-label="Cantidad (kg o unidades)"
+       value={qty}
+       onChange={e=>setQty(e.target.value)}
+       inputMode="decimal"
+       placeholder="Cant."
+       onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}
+      />
+     </label>
+     <button type="button" onClick={()=>add()}>
+      <Icon name="plus" size={16}/>
+      <span>Agregar</span>
+     </button>
+    </div>
 
-     {rows.length>0?(
-      <div className="tablewrap">
-       <table>
-        <thead>
-         <tr>
-          <th>Producto</th>
-          <th>Cantidad</th>
-          <th>Precio base</th>
-          <th>Promo / beneficio</th>
-          <th>Subtotal</th>
-          <th></th>
-         </tr>
-        </thead>
-        <tbody>
-         {rows.map(({lot,n,total:lineTotal,promotionLabel,subtotal})=>(
-          <tr key={lot.id}>
-           <td>
-            <strong>{lot.name}</strong>
-            <small className="mono">{lot.code}{lot.expiry?` · Vence ${lot.expiry}`:""}</small>
-           </td>
-           <td>
-            {lot.unit==="UNIT"?(
-             <div className="qtybuttons">
-              <button
-               type="button"
-               className="secondary"
-               aria-label={"Restar una unidad de "+lot.name}
-               onClick={()=>{
-                if(n<=1000n){const next={...cart};delete next[lot.id];setCart(next);}
-                else setCart({...cart,[lot.id]:(n-1000n).toString()});
-               }}
-              >
-               −
-              </button>
-              <strong>{(n/1000n).toString()}</strong>
-              <button
-               type="button"
-               className="secondary"
-               aria-label={"Sumar una unidad de "+lot.name}
-               disabled={n+1000n>BigInt(lot.quantity)}
-               onClick={()=>add(lot.id,"1")}
-              >
-               +
-              </button>
-             </div>
-            ):(
-             <span className="mono">{fixed(n,3)} kg</span>
-            )}
-           </td>
-           <td className="mono">{money(BigInt(lot.price))}</td>
-           <td>
-            {promotionLabel?(
-             <span className="status AVAILABLE">{promotionLabel}</span>
-            ):"—"}
-            {subtotal>lineTotal&&<small>Ahorro {money(subtotal-lineTotal)}</small>}
-           </td>
-           <td className="mono"><strong>{money(lineTotal)}</strong></td>
-           <td>
-            <button
-             type="button"
-             className="secondary"
-             onClick={()=>{const next={...cart};delete next[lot.id];setCart(next);}}
-            >
-             Quitar
-            </button>
-           </td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-     ):(
-      <div className="om-empty">
-       <span className="om-empty__icon"><Icon name="barcode" size={22}/></span>
-       <strong>La venta está vacía</strong>
-       <p>Escaneá un código de barras, leé una etiqueta de balanza o tocá un artículo rápido abajo.</p>
-      </div>
-     )}
+    <div className="om-pos-categories" role="tablist" aria-label="Sectores de productos">
+     {sectorTabs.map(([k,label,ic])=>(
+      <button
+       key={k}
+       type="button"
+       role="tab"
+       aria-selected={sectorFilter===k}
+       className={"om-pos-cat"+(sectorFilter===k?" active":"")}
+       onClick={()=>setSectorFilter(k)}
+      >
+       <Icon name={ic} size={14}/>
+       <span>{label}</span>
+      </button>
+     ))}
+    </div>
 
-     <div className="v2-cartactions">
-      <button type="button" className="secondary" onClick={()=>scanRef.current?.focus()}>
-       F2 · Volver al escáner
-      </button>
-      <button type="button" className="secondary" onClick={()=>quantityRef.current?.focus()}>
-       F4 · Cantidad
-      </button>
+    {lots.length===0?(
+     <div className="om-pos-empty-branch">
+      <Icon name="store" size={26}/>
+      <div>
+       <strong>{branchName||"Esta sucursal"} no tiene lotes con stock disponible</strong>
+       {branchStockSummary.productsElsewhere>0?(
+        <p>
+         Hay <strong>{branchStockSummary.productsElsewhere} productos</strong> con stock en{" "}
+         <strong>{branchStockSummary.branches.join(" y ")}</strong>. Tocá{" "}
+         <strong>Realizar arqueo</strong> arriba para cerrar este turno y abrir caja en esa sucursal, o{" "}
+         <Link href="/inventario?view=recepcion">recibí mercadería acá</Link>.
+        </p>
+       ):(
+        <p>Cargá stock desde <Link href="/inventario?view=recepcion">Compras y recepción</Link> para empezar a vender.</p>
+       )}
+      </div>
+     </div>
+    ):quick.length>0?(
+     <div className="om-pos-tile-grid">
+      {quick.map(l=>(
+       <button
+        className="om-pos-tile"
+        data-sector={l.sector??"OTHER"}
+        key={l.productId}
+        type="button"
+        onClick={()=>selectQuick(l)}
+       >
+        <div className="om-pos-tile__top">
+         <span className="om-pos-tile__sector">{sectorLabels[l.sector??""]??"General"}</span>
+         {l.quickAccess&&<span className="om-pos-tile__pin">★</span>}
+        </div>
+        <strong>{l.name}</strong>
+        <div className="om-pos-tile__foot">
+         <span>{money(BigInt(l.price))}</span>
+         <span className="om-pos-tile__unit">{l.unit==="KG"?"kg":"u."}</span>
+        </div>
+       </button>
+      ))}
+     </div>
+    ):(
+     <div className="om-empty">
+      <span className="om-empty__icon"><Icon name="box" size={20}/></span>
+      <strong>Sin artículos en este sector</strong>
+      <p>Elegí otro sector arriba o buscá por nombre / código.</p>
+     </div>
+    )}
+   </div>
+
+   <aside className="om-pos-terminal">
+    <div className="om-pos-terminal__head">
+     <div className="om-pos-terminal__title">
+      <span className="om-card__icon"><Icon name="receipt" size={16}/></span>
+      <div>
+       <h2>Nueva venta</h2>
+       <small>{rows.length} {rows.length===1?"ítem":"ítems"} · FEFO automático</small>
+      </div>
+     </div>
+     <div className="om-pos-terminal__tools">
       <button type="button" className="secondary" disabled={!rows.length} onClick={parkCurrentSale}>
        <Icon name="clock" size={14}/>
        <span>Pausar venta</span>
@@ -732,143 +819,168 @@ export default function Cart({
        type="button"
        className="secondary"
        disabled={!rows.length}
+       aria-label="Vaciar venta"
        onClick={()=>{if(window.confirm("¿Vaciar la venta actual?")){setCart({});scanRef.current?.focus();}}}
       >
-       Vaciar venta
+       <Icon name="trash" size={14}/>
       </button>
      </div>
-    </section>
+    </div>
 
     {parked.length>0&&(
-     <section className="om-card">
-      <header className="om-card__head">
-       <div className="om-card__heading">
-        <span className="om-card__icon"><Icon name="clock" size={16}/></span>
-        <div>
-         <h2>Ventas en pausa ({parked.length})</h2>
-         <p>Tickets retenidos temporalmente en esta caja</p>
-        </div>
-       </div>
-      </header>
-      <div className="om-card__body--pad">
-       {parked.map(entry=>{
-        const count=Object.keys(entry.cart).length;
-        const est=Object.entries(entry.cart).reduce((sum,[id,q])=>{
-         const l=byId.get(id);
-         return l?sum+(BigInt(l.price)*BigInt(q)+500n)/1000n:sum;
-        },0n);
-        const cust=customers.find(c=>c.id===entry.customerId);
-        return (
-         <div className="om-record-row" key={entry.id}>
-          <div>
-           <strong>{cust?cust.name:"Consumidor final"} · {count} líneas</strong>
-           <small className="mono">Pausada {entry.savedAt} · Est. {money(est)}</small>
-          </div>
-          <div className="om-row-actions">
-           <button type="button" className="secondary" onClick={()=>resumeParkedSale(entry)}>
-            Retomar
-           </button>
-           <button
-            type="button"
-            className="secondary"
-            aria-label="Descartar venta en pausa"
-            onClick={()=>persistParked(parked.filter(p=>p.id!==entry.id))}
-           >
-            <Icon name="trash" size={14}/>
-           </button>
-          </div>
-         </div>
-        );
-       })}
+     <div className="om-pos-parked">
+      <div className="om-pos-parked__head">
+       <Icon name="clock" size={14}/>
+       <strong>{parked.length} {parked.length===1?"venta en pausa":"ventas en pausa"}</strong>
       </div>
-     </section>
+      {parked.map(entry=>{
+       const count=Object.keys(entry.cart).length;
+       const est=Object.entries(entry.cart).reduce((sum,[id,q])=>{
+        const l=byId.get(id);
+        return l?sum+(BigInt(l.price)*BigInt(q)+500n)/1000n:sum;
+       },0n);
+       const cust=customers.find(c=>c.id===entry.customerId);
+       return (
+        <div className="om-pos-parked__row" key={entry.id}>
+         <div>
+          <strong>{cust?cust.name:"Consumidor final"} ({count})</strong>
+          <small className="mono">{entry.savedAt} · {money(est)}</small>
+         </div>
+         <div className="om-row-actions">
+          <button type="button" className="secondary" onClick={()=>resumeParkedSale(entry)}>
+           Retomar
+          </button>
+          <button
+           type="button"
+           className="secondary"
+           aria-label="Descartar venta en pausa"
+           onClick={()=>persistParked(parked.filter(p=>p.id!==entry.id))}
+          >
+           <Icon name="x" size={13}/>
+          </button>
+         </div>
+        </div>
+       );
+      })}
+     </div>
     )}
 
-    <section className="om-card">
-     <header className="om-card__head">
-      <div className="om-card__heading">
-       <span className="om-card__icon"><Icon name="grid" size={16}/></span>
-       <div>
-        <h2>Accesos rápidos</h2>
-        <p>Productos fijados y artículos disponibles en esta sucursal</p>
-       </div>
-      </div>
-     </header>
-
-     <div className="v2-tabs">
-      {sectorTabs.map(([k,label])=>(
-       <button
-        key={k}
-        type="button"
-        className={sectorFilter===k?"active":""}
-        onClick={()=>setSectorFilter(k)}
-       >
-        {label}
-       </button>
-      ))}
-     </div>
-
-     {quick.length>0?(
-      <div className="v2-quicktiles">
-       {quick.map(l=>(
-        <button className="om-pos-tile" key={l.productId} type="button" onClick={()=>selectQuick(l)}>
-         <strong>{l.quickAccess?"★ ":""}{l.name}</strong>
-         <div className="om-pos-tile__foot">
-          <span>{money(BigInt(l.price))}</span>
-          <span className="om-pos-tile__unit">{l.unit==="KG"?"kg":"u."}</span>
-         </div>
-        </button>
-       ))}
-      </div>
-     ):(
-      <p className="empty">Sin mercadería apta en este sector.</p>
-     )}
-    </section>
-   </div>
-
-   <section className="om-card v2-posright">
-    <form action={saleAction} className="fields">
+    <form action={saleAction} className="om-pos-form">
      <input type="hidden" name="shiftId" value={shiftId}/>
-     <label>
-      Cliente (opcional)
-      <select name="customerId" value={customerId} onChange={e=>setCustomerId(e.target.value)}>
-       <option value="">Consumidor final</option>
-       {customers.map(c=><option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
-      </select>
-     </label>
-     {customerId&&(()=>{
-      const selectedCust=customers.find(c=>c.id===customerId);
-      const pts=BigInt(selectedCust?.availablePoints??"0");
-      const val=BigInt(pointValueCents||"0");
-      return selectedCust?(
-       <small className="mono" style={{display:"block",marginTop:-4}}>
-        Puntos disponibles: <strong>{String(pts)}</strong>{val>0n?` (${money(pts*val)})`:""}
-       </small>
-      ):null;
-     })()}
-
      <input type="hidden" name="requestKey" value={requestKey}/>
      <input type="hidden" name="lines" value={JSON.stringify(rows.map(r=>({lotId:r.lot.id,quantity:fixed(r.n,3)})))}/>
      <input type="hidden" name="quotedTotal" value={fixed(total,2)}/>
 
-     <div>
-      <div className="v2-totalline">
-       <span>Subtotal</span>
-       <strong>{money(rows.reduce((a,r)=>a+r.subtotal,0n))}</strong>
+     <div className="om-pos-customer">
+      <label>
+       <span>Cliente (opcional)</span>
+       <select name="customerId" value={customerId} onChange={e=>setCustomerId(e.target.value)}>
+        <option value="">Consumidor final</option>
+        {customers.map(c=><option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
+       </select>
+      </label>
+      {customerId&&(()=>{
+       const selectedCust=customers.find(c=>c.id===customerId);
+       const pts=BigInt(selectedCust?.availablePoints??"0");
+       const val=BigInt(pointValueCents||"0");
+       return selectedCust?(
+        <small className="mono om-pos-pts">
+         Puntos: <strong>{String(pts)}</strong>{val>0n?` (${money(pts*val)})`:""}
+        </small>
+       ):null;
+      })()}
+     </div>
+
+     <div className="om-pos-ticket">
+      {rows.length>0?(
+       <div className="om-pos-lines">
+        {rows.map(({lot,n,total:lineTotal,promotionLabel,subtotal})=>(
+         <div className="om-pos-line" key={lot.id}>
+          <div className="om-pos-line__info">
+           <strong>{lot.name}</strong>
+           <small className="mono">
+            {money(BigInt(lot.price))}/{lot.unit==="KG"?"kg":"u."} · Lote {lot.code}
+            {lot.expiry?` · Vto ${lot.expiry}`:""}
+           </small>
+           {promotionLabel&&(
+            <span className="om-pos-promo">
+             {promotionLabel}
+             {subtotal>lineTotal?` (−${money(subtotal-lineTotal)})`:""}
+            </span>
+           )}
+          </div>
+          <div className="om-pos-line__qty">
+           {lot.unit==="UNIT"?(
+            <div className="qtybuttons">
+             <button
+              type="button"
+              className="secondary"
+              aria-label={"Restar una unidad de "+lot.name}
+              onClick={()=>{
+               if(n<=1000n){const next={...cart};delete next[lot.id];setCart(next);}
+               else setCart({...cart,[lot.id]:(n-1000n).toString()});
+              }}
+             >
+              −
+             </button>
+             <strong>{(n/1000n).toString()}</strong>
+             <button
+              type="button"
+              className="secondary"
+              aria-label={"Sumar una unidad de "+lot.name}
+              disabled={n+1000n>BigInt(lot.quantity)}
+              onClick={()=>add(lot.id,"1")}
+             >
+              +
+             </button>
+            </div>
+           ):(
+            <span className="mono om-pos-kg">{fixed(n,3)} kg</span>
+           )}
+          </div>
+          <div className="om-pos-line__price">
+           <strong className="mono">{money(lineTotal)}</strong>
+           <button
+            type="button"
+            className="om-pos-rm"
+            aria-label={"Quitar "+lot.name}
+            onClick={()=>{const next={...cart};delete next[lot.id];setCart(next);}}
+           >
+            <Icon name="x" size={13}/>
+           </button>
+          </div>
+         </div>
+        ))}
+       </div>
+      ):(
+       <div className="om-pos-ticket-empty">
+        <Icon name="barcode" size={24}/>
+        <strong>Ticket vacío</strong>
+        <p>Escaneá un código o tocá un artículo a la izquierda para empezar.</p>
+       </div>
+      )}
+     </div>
+
+     <div className="om-pos-display">
+      <div className="om-pos-display__rows">
+       <div>
+        <span>Subtotal</span>
+        <strong className="mono">{money(subtotalSum)}</strong>
+       </div>
+       {totalSavings>0n&&(
+        <div className="om-pos-display__save">
+         <span>Descuentos / promos</span>
+         <strong className="mono">− {money(totalSavings)}</strong>
+        </div>
+       )}
       </div>
-      <div className="v2-totalline v2-savings">
-       <span>Promociones y beneficios</span>
-       <strong>− {money(rows.reduce((a,r)=>a+r.subtotal-r.total,0n))}</strong>
+      <div className="om-pos-display__total">
+       <span>TOTAL A COBRAR</span>
+       <h2 className="total">{money(total)}</h2>
       </div>
      </div>
 
-     <div className="v2-totalbox">
-      <small>TOTAL A COBRAR</small>
-      <h2 className="total">{money(total)}</h2>
-     </div>
-
-     <div>
-      <label style={{marginBottom:8}}>Medio de pago</label>
+     <div className="om-pos-pay">
       <input type="hidden" name="payment" value={payment}/>
       <div className="v2-methodgrid" role="group" aria-label="Medio de pago">
        {[
@@ -889,21 +1001,24 @@ export default function Cart({
         </button>
        ))}
       </div>
-     </div>
 
-     <div className="om-payment-fields">
-      {payment==="MIXED"&&methods.map(([k,label])=>(
-       <label key={k}>
-        {label}
-        <input name={k} value={split[k]} inputMode="decimal" onChange={e=>setSplit(old=>({...old,[k]:e.target.value}))}/>
-       </label>
-      ))}
+      {payment==="MIXED"&&(
+       <div className="om-pos-mixed">
+        {methods.map(([k,label])=>(
+         <label key={k}>
+          <span>{label}</span>
+          <input name={k} value={split[k]} inputMode="decimal" onChange={e=>setSplit(old=>({...old,[k]:e.target.value}))}/>
+         </label>
+        ))}
+        <small className="mono">Asignado: {money(splitTotal)} / {money(total)}</small>
+       </div>
+      )}
 
       {needsCash&&(
-       <>
+       <div className="om-pos-cashbox">
         <label>
-         Efectivo recibido
-         <input name="tendered" value={tendered} onChange={e=>setTendered(e.target.value)} inputMode="decimal" required/>
+         <span>Efectivo recibido</span>
+         <input name="tendered" value={tendered} onChange={e=>setTendered(e.target.value)} inputMode="decimal" required placeholder="0,00"/>
         </label>
         {payment==="CASH"&&total>0n&&(
          <div className="om-cash-pills">
@@ -917,24 +1032,20 @@ export default function Cart({
           ))}
          </div>
         )}
-       </>
+       </div>
       )}
+
+      {change!==null&&(
+       <div className="om-pos-change">
+        <span>Vuelto a entregar</span>
+        <strong className="mono">{money(change)}</strong>
+       </div>
+      )}
+
+      <Submit disabled={!rows.length||!validPayment}/>
      </div>
-
-     {payment==="MIXED"&&(
-      <small>
-       Asignado: {money(splitTotal)} · Total: {money(total)}. Seleccioná al menos dos medios y completá el total.
-      </small>
-     )}
-
-     <div className="v2-change">
-      {change!==null&&<>Vuelto a entregar: <strong>{money(change)}</strong></>}
-     </div>
-
-     <Submit disabled={!rows.length||!validPayment}/>
-     <small>Comprobante interno, no fiscal. Los pagos electrónicos se registran manualmente.</small>
     </form>
-   </section>
+   </aside>
   </section>
  );
 }

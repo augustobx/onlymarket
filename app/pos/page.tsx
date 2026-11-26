@@ -44,16 +44,25 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
  ]);
  const ptsById=new Map(pointsSummary.map(x=>[x.id,x.available]));
 
- const [lots,promos,sales,totals,movements,returns]=shift
+ const [lots,allProducts,promos,sales,totals,movements,returns]=shift
   ?await Promise.all([
    db.lot.findMany({where:{tenantId:s.tenantId,branchId:shift.branchId,quantityMilli:{gt:0n},status:"AVAILABLE",product:{active:true}},include:{product:true},orderBy:[{expiresOn:"asc"},{receivedAt:"asc"}]}),
+   db.product.findMany({
+    where:{tenantId:s.tenantId,active:true},
+    select:{
+     id:true,name:true,sku:true,barcode:true,weightCode:true,unit:true,sector:true,salePriceCents:true,
+     lots:{where:{quantityMilli:{gt:0n}},select:{branchId:true,status:true,quantityMilli:true,expiresOn:true,branch:{select:{name:true}}}},
+    },
+    orderBy:{name:"asc"},
+    take:500,
+   }),
    db.promotion.findMany({where:{tenantId:s.tenantId,active:true}}),
    db.sale.findMany({where:{tenantId:s.tenantId,shiftId:shift.id},include:{cancellation:true,returns:{take:1}},orderBy:{createdAt:"desc"},take:30}),
    db.sale.aggregate({where:{tenantId:s.tenantId,shiftId:shift.id,cancellation:null},_sum:{cashCents:true,debitCents:true,creditCents:true,transferCents:true}}),
    db.cashMovement.findMany({where:{tenantId:s.tenantId,shiftId:shift.id},orderBy:{createdAt:"desc"},take:50}),
    db.saleReturn.aggregate({where:{tenantId:s.tenantId,shiftId:shift.id},_sum:{cashCents:true,debitCents:true,creditCents:true,transferCents:true,refundCents:true}}),
   ])
-  :[[],[],[],null,[],null];
+  :[[],[],[],[],null,[],null];
 
  const promoDates=promos.map(p=>({...p,startsOn:dateOnly(p.startsOn),endsOn:dateOnly(p.endsOn)}));
  const available=lots.flatMap(l=>{
@@ -84,6 +93,33 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
    expiry:info.expiresOn,
   }];
  });
+
+ const sellableProductIds=new Set(available.map(l=>l.productId));
+ const catalogHints=allProducts
+  .filter(p=>!sellableProductIds.has(p.id))
+  .map(p=>{
+   const byOtherBranch=new Map<string,bigint>();
+   let hasBlockedInBranch=false;
+   for(const l of p.lots){
+    if(l.branchId===shift?.branchId){
+     hasBlockedInBranch=true;
+    }else if(l.status==="AVAILABLE"&&(!l.expiresOn||l.expiresOn.toISOString().slice(0,10)>=today)){
+     byOtherBranch.set(l.branch.name,(byOtherBranch.get(l.branch.name)??0n)+l.quantityMilli);
+    }
+   }
+   return {
+    id:p.id,
+    name:p.name,
+    sku:p.sku,
+    barcode:p.barcode,
+    weightCode:p.weightCode,
+    unit:p.unit,
+    sector:p.sector,
+    price:p.salePriceCents.toString(),
+    hasBlockedInBranch,
+    otherBranches:[...byOtherBranch.entries()].map(([branchName,qtyMilli])=>({branchName,quantity:qtyMilli.toString()})),
+   };
+  });
 
  const expected=shift?await expectedCash(db,shift):0n;
  const paymentTotals:[string,bigint][]=[
@@ -126,6 +162,48 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
     </div>
 
     <div className="v2-actions">
+     {shift&&(
+      <>
+       <Operation
+        title="Movimientos de efectivo"
+        trigger="Ingreso / retiro"
+        variant="secondary"
+        description="Aportes o retiros de efectivo durante el turno. Si corresponde a un gasto o pago a proveedor, registralo también en Finanzas."
+       >
+        <form action={cashMovementAction} className="fields">
+         <input type="hidden" name="shiftId" value={shift.id}/>
+         <input type="hidden" name="requestKey" value={randomUUID()}/>
+         <Field label="Tipo">
+          <select name="kind">
+           <option value="IN">Ingreso</option>
+           <option value="OUT">Retiro</option>
+          </select>
+         </Field>
+         <Field label="Importe ($)">
+          <input name="amount" inputMode="decimal" required/>
+         </Field>
+         <Field label="Motivo">
+          <input name="reason" maxLength={300} required/>
+         </Field>
+         <button>Registrar movimiento</button>
+        </form>
+       </Operation>
+       <Operation
+        title="Cierre de caja"
+        trigger="Realizar arqueo"
+        variant="secondary"
+        description={`Efectivo esperado en caja: ${money(expected)}. Reintegros en efectivo: ${money(returns?._sum.cashCents??0n)}.`}
+       >
+        <form action={closeAction} className="fields">
+         <input type="hidden" name="shiftId" value={shift.id}/>
+         <Field label="Efectivo contado ($)">
+          <input name="counted" inputMode="decimal" required/>
+         </Field>
+         <button>Cerrar caja</button>
+        </form>
+       </Operation>
+      </>
+     )}
      {s.role!=="CASHIER"&&(
       <Link href="/" className="v2-posback">
        <Icon name="chevronLeft" size={15}/>
@@ -137,7 +215,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       <span>Mi cuenta</span>
      </Link>
      <form action={logoutAction}>
-      <button className="secondary">
+      <button className="secondary v2-posback-btn">
        <Icon name="logOut" size={14}/>
        <span>Salir</span>
       </button>
@@ -167,6 +245,8 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       <Cart
        key={shift.id+":"+String(sales[0]?.id??"")}
        lots={available}
+       catalogHints={catalogHints}
+       branchName={shift.branch.name}
        customers={customers.map(c=>({...c,availablePoints:(ptsById.get(c.id)??0n).toString()}))}
        weightPrefix={settings.weightPrefix}
        memberBps={settings.memberDiscountBps}
@@ -181,11 +261,11 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
        requestKey={randomUUID()}
       />
 
-      <div className="v2-posadmin">
+      <section className="om-pos-turn-dock">
        <div className="om-pos-shiftbar">
         <div className="om-pos-shiftbar__metrics">
          <div className="om-pos-shiftpill">
-          <span>Turno {shift.branch.name}</span>
+          <span>Turno {shift.branch.name} · Fondo</span>
           <strong>{formatMoney(shift.openingCents)}</strong>
          </div>
          <div className="om-pos-shiftpill om-pos-shiftpill--highlight">
@@ -198,46 +278,6 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
            <strong>{formatMoney(value)}</strong>
           </div>
          ))}
-        </div>
-        <div className="om-pos-shiftbar__actions">
-         <Operation
-          title="Movimientos de efectivo"
-          trigger="Ingreso / retiro"
-          variant="secondary"
-          description="Aportes o retiros de efectivo durante el turno. Si corresponde a un gasto o pago a proveedor, registralo también en Finanzas."
-         >
-          <form action={cashMovementAction} className="fields">
-           <input type="hidden" name="shiftId" value={shift.id}/>
-           <input type="hidden" name="requestKey" value={randomUUID()}/>
-           <Field label="Tipo">
-            <select name="kind">
-             <option value="IN">Ingreso</option>
-             <option value="OUT">Retiro</option>
-            </select>
-           </Field>
-           <Field label="Importe ($)">
-            <input name="amount" inputMode="decimal" required/>
-           </Field>
-           <Field label="Motivo">
-            <input name="reason" maxLength={300} required/>
-           </Field>
-           <button>Registrar movimiento</button>
-          </form>
-         </Operation>
-         <Operation
-          title="Cierre de caja"
-          trigger="Realizar arqueo"
-          variant="secondary"
-          description={`Efectivo esperado en caja: ${money(expected)}. Reintegros en efectivo: ${money(returns?._sum.cashCents??0n)}.`}
-         >
-          <form action={closeAction} className="fields">
-           <input type="hidden" name="shiftId" value={shift.id}/>
-           <Field label="Efectivo contado ($)">
-            <input name="counted" inputMode="decimal" required/>
-           </Field>
-           <button>Cerrar caja</button>
-          </form>
-         </Operation>
         </div>
        </div>
 
@@ -302,7 +342,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
          )}
         </SectionCard>
        </div>
-      </div>
+      </section>
      </>
     )}
 
