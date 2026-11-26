@@ -553,12 +553,20 @@ try {
   assert.equal(exportAuditoria.status, 200);
 
   await page.goto(tenantBase + "/catalogo");
+  await page.getByText("¿Tenés alguna duda?").waitFor();
+  await page.getByRole("button", { name: /Notificaciones de vencimientos/ }).click();
+  await page.getByRole("dialog", { name: "Alertas de vencimientos" }).waitFor();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Ayuda: Productos e inventario" }).click();
   const helpDialog = page.getByRole("dialog");
   await helpDialog.getByRole("heading", { name: "Productos e inventario" }).waitFor();
+  await helpDialog.getByRole("link", { name: "Manual de usuario completo" }).waitFor();
   await helpDialog.getByRole("button", { name: /¿Cómo cargo un ingreso de carne/ }).first().click();
   await helpDialog.getByRole("link", { name: "Ir a Recibir mercadería" }).waitFor();
   await helpDialog.getByRole("button", { name: "Entendido" }).click();
+  const manualRes = await httpGet("/manual-usuario.html", { host: `${slug}.localhost:3000` });
+  assert.equal(manualRes.status, 200);
+  assert.match(manualRes.text, /Manual Completo de Usuario/);
   await page.getByRole("link", { name: "Centro de ayuda" }).click();
   await page.getByRole("heading", { name: "Centro de ayuda y guías del sistema" }).waitFor();
   await page.getByLabel("Buscar guía o tema").fill("arqueo");

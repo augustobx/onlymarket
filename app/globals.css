@@ -605,8 +605,9 @@ button.secondary.active {
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .om-top-pos {
@@ -4236,6 +4237,313 @@ td small {
   .om-ayuda-qa-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .om-notif-menu {
+    position: fixed !important;
+    top: 72px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+  }
+
+  .om-help-nudge {
+    position: fixed !important;
+    top: 72px !important;
+    right: 12px !important;
+    left: auto !important;
+    width: min(260px, calc(100vw - 24px)) !important;
+  }
+
+  .om-help-nudge::before {
+    display: none;
+  }
+}
+
+/* Friendly ? Nudge & Manual link */
+.om-help-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.om-help-nudge {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 95;
+  width: 245px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 102, 0, 0.45);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.28);
+  animation: om-nudge-in 0.25s ease-out;
+}
+
+.om-help-nudge::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 13px;
+  width: 10px;
+  height: 10px;
+  background: #0f172a;
+  border-left: 1px solid rgba(255, 102, 0, 0.45);
+  border-top: 1px solid rgba(255, 102, 0, 0.45);
+  transform: rotate(45deg);
+}
+
+@keyframes om-nudge-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.om-help-nudge__body {
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  text-align: left;
+  color: inherit !important;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+  white-space: normal !important;
+  box-shadow: none !important;
+}
+
+.om-help-nudge__body strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fdba74;
+}
+
+.om-help-nudge__body span {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #e2e8f0;
+  font-weight: 400;
+}
+
+.om-help-nudge__close {
+  width: 22px;
+  height: 22px;
+  min-height: 22px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+  flex-shrink: 0;
+  box-shadow: none !important;
+}
+
+.om-help-nudge__close:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+
+.om-help-dialog__footlinks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Expiry Notifications Bell */
+.om-notif-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.om-notif-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--line) !important;
+  background: var(--bg-surface-default) !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+}
+
+.om-notif-trigger:hover {
+  border-color: var(--color-brand) !important;
+  color: var(--color-brand) !important;
+}
+
+.om-notif-trigger.is-warn {
+  border-color: color-mix(in srgb, #d97706 45%, var(--line)) !important;
+}
+
+.om-notif-trigger.is-danger {
+  border-color: color-mix(in srgb, #dc2626 45%, var(--line)) !important;
+}
+
+.om-notif-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d97706;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-surface-default);
+}
+
+.om-notif-badge.is-danger {
+  background: #dc2626;
+}
+
+.om-notif-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: min(390px, calc(100vw - 24px));
+  background: var(--bg-surface-default);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.24);
+  overflow: hidden;
+  display: grid;
+}
+
+.om-notif-menu__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-surface-subtle);
+  border-bottom: 1px solid var(--line);
+}
+
+.om-notif-menu__head strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.om-notif-menu__head small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.om-notif-menu__list {
+  max-height: 330px;
+  overflow-y: auto;
+  display: grid;
+}
+
+.om-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none !important;
+  color: var(--ink);
+  transition: background 0.12s ease;
+}
+
+.om-notif-item:hover {
+  background: var(--bg-surface-subtle);
+}
+
+.om-notif-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d97706;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.om-notif-dot.is-danger {
+  background: #dc2626;
+}
+
+.om-notif-item__main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.om-notif-item__main strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.om-notif-item__main small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.om-notif-time {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.om-notif-time.is-danger {
+  color: #b91c1c;
+}
+
+.om-notif-empty {
+  padding: 28px 16px;
+  text-align: center;
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  color: var(--muted);
+}
+
+.om-notif-empty svg {
+  color: var(--success-ink);
+}
+
+.om-notif-empty strong {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.om-notif-menu__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-surface-subtle);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 @media print {

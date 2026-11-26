@@ -8,6 +8,7 @@ const PUBLIC_EXACT = new Set([
   "/manifest.webmanifest",
   "/sw.js",
   "/market-icon.svg",
+  "/manual-usuario.html",
 ]);
 
 function externalRedirect(targetPath: string) {

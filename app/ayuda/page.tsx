@@ -15,6 +15,13 @@ export default async function Page(){
     kicker="DOCUMENTACIÓN INTERACTIVA"
     title="Centro de ayuda y guías del sistema"
     subtitle="Explicación clara del funcionamiento de OnlyMarket, su ciclo operativo completo y la guía rápida de cada módulo."
+    actions={
+     <a href="/manual-usuario.html" target="_blank" rel="noopener noreferrer" className="actionlink">
+      <Icon name="info" size={15}/>
+      <span>Manual de usuario completo (HTML)</span>
+      <Icon name="arrowUpRight" size={14}/>
+     </a>
+    }
    />
 
    <SectionCard

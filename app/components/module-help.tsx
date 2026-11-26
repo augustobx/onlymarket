@@ -23,6 +23,7 @@ export function ModuleHelpButton({
  const activeRoute=routeOverride??pathname;
  const guide=resolveModuleGuide(activeRoute);
  const [open,setOpen]=useState(false);
+ const [showNudge,setShowNudge]=useState(false);
  const [query,setQuery]=useState("");
  const [category,setCategory]=useState<"Todas"|AssistantCategory>("Todas");
  const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -30,11 +31,22 @@ export function ModuleHelpButton({
  const ref=useRef<HTMLDialogElement>(null);
 
  useEffect(()=>{
+  try{
+   if(!localStorage.getItem("om_help_nudge_seen"))setShowNudge(true);
+  }catch{}
+ },[]);
+
+ useEffect(()=>{
   const dialog=ref.current;
   if(!dialog)return;
   if(open&&!dialog.open)dialog.showModal();
   if(!open&&dialog.open)dialog.close();
  },[open]);
+
+ const dismissNudge=()=>{
+  setShowNudge(false);
+  try{localStorage.setItem("om_help_nudge_seen","1");}catch{}
+ };
 
  const {contextual,all}=useMemo(
   ()=>matchAssistantQuestions(query,activeRoute),
@@ -52,6 +64,7 @@ export function ModuleHelpButton({
  );
 
  const openModal=()=>{
+  dismissNudge();
   setSelectedId(null);
   setQuery("");
   setCategory("Todas");
@@ -61,15 +74,33 @@ export function ModuleHelpButton({
 
  return (
   <>
-   <button
-    type="button"
-    className={`om-help-trigger${dark?" om-help-trigger--dark":""}`}
-    onClick={openModal}
-    aria-label={`Ayuda: ${guide.title}`}
-    title={`Asistente y guía rápida · ${guide.title}`}
-   >
-    <Icon name="help" size={16}/>
-   </button>
+   <div className="om-help-wrap">
+    <button
+     type="button"
+     className={`om-help-trigger${dark?" om-help-trigger--dark":""}`}
+     onClick={openModal}
+     aria-label={`Ayuda: ${guide.title}`}
+     title={`Asistente y guía rápida · ${guide.title}`}
+    >
+     <Icon name="help" size={16}/>
+    </button>
+    {showNudge&&(
+     <div className="om-help-nudge" role="note">
+      <button type="button" className="om-help-nudge__body" onClick={openModal}>
+       <strong>¿Tenés alguna duda?</strong>
+       <span>Presioname para ver paso a paso qué hacer</span>
+      </button>
+      <button
+       type="button"
+       className="om-help-nudge__close"
+       aria-label="Cerrar sugerencia de ayuda"
+       onClick={dismissNudge}
+      >
+       <Icon name="x" size={12}/>
+      </button>
+     </div>
+    )}
+   </div>
 
    <dialog
     ref={ref}
@@ -253,10 +284,17 @@ export function ModuleHelpButton({
     </div>
 
     <div className="om-help-dialog__foot">
-     <Link href="/ayuda" className="actionlink secondarylink" onClick={()=>setOpen(false)}>
-      <Icon name="help" size={14}/>
-      <span>Abrir Centro de ayuda completo</span>
-     </Link>
+     <div className="om-help-dialog__footlinks">
+      <a href="/manual-usuario.html" target="_blank" rel="noopener noreferrer" className="actionlink" onClick={()=>setOpen(false)}>
+       <Icon name="info" size={14}/>
+       <span>Manual de usuario completo</span>
+       <Icon name="arrowUpRight" size={13}/>
+      </a>
+      <Link href="/ayuda" className="actionlink secondarylink" onClick={()=>setOpen(false)}>
+       <Icon name="help" size={14}/>
+       <span>Centro de ayuda</span>
+      </Link>
+     </div>
      <button type="button" onClick={()=>setOpen(false)}>Entendido</button>
     </div>
    </dialog>

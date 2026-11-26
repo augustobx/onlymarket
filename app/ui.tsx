@@ -4,11 +4,15 @@ import {requireSession} from "../src/server/auth";
 import {logoutAction} from "./actions";
 import {showTransform,profiles} from "../src/domain/settings.mjs";
 import {resolveOkMessage} from "../src/domain/notices.mjs";
+import {db} from "../src/server/db";
+import {classifyLot} from "../src/domain/inventory.mjs";
+import {localDay} from "../src/domain/parse.mjs";
 import {WorkspaceFrame} from "./navigation";
 import {PaletteSelector,DarkModeToggle} from "./theme/ThemeControls";
 import {Icon,type IconName} from "./components/icons";
 import {ToastTrigger} from "./components/toast";
 import {ModuleHelpButton} from "./components/module-help";
+import {NotificationsBell,type ExpiryNotification} from "./components/notifications-bell";
 
 export const sectors={BUTCHERY:"Carnicería",DELI:"Fiambrería",PRODUCE:"Verdulería",GROCERY:"Almacén",OTHER:"Otros"};
 export const states:Record<string,string>={AVAILABLE:"Disponible",EXPIRING:"Próximo a vencer",REVIEW:"Revisar calidad",BLOCKED:"Bloqueado",EXHAUSTED:"Agotado"};
@@ -35,6 +39,55 @@ export async function Shell({
 }){
  const s=await requireSession();
  const manager=["OWNER","MANAGER"].includes(s.role);
+
+ let expiryNotifications:ExpiryNotification[]=[];
+ if(s.role!=="CASHIER"){
+  const today=localDay();
+  const todayMs=Date.parse(today+"T00:00:00Z");
+  const alertLots=await db.lot.findMany({
+   where:{tenantId:s.tenantId,quantityMilli:{gt:0n},product:{active:true}},
+   select:{
+    id:true,
+    code:true,
+    status:true,
+    expiresOn:true,
+    reviewAt:true,
+    quantityMilli:true,
+    branch:{select:{name:true}},
+    product:{select:{name:true,unit:true,alertDays:true}},
+   },
+   orderBy:{expiresOn:"asc"},
+   take:800,
+  });
+  expiryNotifications=alertLots
+   .flatMap(l=>{
+    const expiry=l.expiresOn?.toISOString().slice(0,10)??null;
+    const review=l.reviewAt?localDay(l.reviewAt):null;
+    const state=classifyLot({
+     today,
+     expiresOn:expiry,
+     reviewOn:review,
+     alertDays:l.product.alertDays,
+     status:l.status,
+     quantityMilli:l.quantityMilli,
+    });
+    const isExpiredBlock=state==="BLOCKED"&&Boolean(expiry&&expiry<=today);
+    if(!isExpiredBlock&&state!=="EXPIRING")return [];
+    const daysLeft=expiry?Math.round((Date.parse(expiry+"T00:00:00Z")-todayMs)/86400000):null;
+    return [{
+     lotId:l.id,
+     productName:l.product.name,
+     lotCode:l.code,
+     branchName:l.branch.name,
+     qtyText:amount(l.quantityMilli,l.product.unit),
+     expiry:expiry??"",
+     state:(isExpiredBlock?"BLOCKED":"EXPIRING") as "BLOCKED"|"EXPIRING",
+     daysLeft,
+    }];
+   })
+   .sort((a,b)=>(a.state===b.state?0:a.state==="BLOCKED"?-1:1)||a.expiry.localeCompare(b.expiry))
+   .slice(0,18);
+ }
 
  const groups:{name:string;items:{href:string;label:string;icon:IconName}[]}[]=[
   {name:"Operación diaria",items:[
@@ -105,6 +158,7 @@ export async function Shell({
       <Icon name="arrowUpRight" size={14}/>
      </Link>
     )}
+    {s.role!=="CASHIER"&&<NotificationsBell items={expiryNotifications}/>}
     <ModuleHelpButton/>
     <PaletteSelector/>
     <DarkModeToggle/>

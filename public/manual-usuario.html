@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manual Completo de Usuario · OnlyMarket by NanoLabs</title>
+<style>
+:root{
+ --bg:#f8fafc;--surface:#ffffff;--subtle:#f1f5f9;--ink:#0f172a;--ink2:#334155;--muted:#64748b;
+ --line:#e2e8f0;--brand:#ff6600;--brand-soft:rgba(255,102,0,.1);
+ --ok:#15803d;--ok-bg:#dcfce7;--warn:#b45309;--warn-bg:#fef3c7;--bad:#b91c1c;--bad-bg:#fee2e2;
+ --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+ --sans:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+.topbar{position:sticky;top:0;z-index:20;background:#0f172a;color:#fff;padding:12px 24px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#ff6600,#ea580c);display:grid;place-items:center;font-weight:800;font-size:17px;color:#fff}
+.brand strong{display:block;font-size:16px;line-height:1.1}
+.brand small{color:#94a3b8;font-size:12px}
+.tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.search{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:8px 12px;border-radius:10px;font-size:13.5px;min-width:260px;outline:0}
+.search::placeholder{color:#94a3b8}
+.search:focus{border-color:#ff6600;background:rgba(255,255,255,.14)}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer}
+.btn-ghost{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.layout{max-width:1360px;margin:0 auto;padding:24px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:24px;align-items:start}
+.toc{position:sticky;top:80px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:calc(100vh - 104px);overflow-y:auto}
+.toc h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.toc-group{margin-top:12px}
+.toc-group small{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.toc a{display:block;padding:5px 8px;border-radius:8px;color:var(--ink2);font-size:13px}
+.toc a:hover{background:var(--subtle);color:var(--brand);text-decoration:none}
+main{display:grid;gap:22px;min-width:0}
+.hero{background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;border-radius:20px;padding:28px;display:grid;gap:16px}
+.hero h1{margin:0;font-size:clamp(24px,3vw,32px);line-height:1.15}
+.hero p{margin:0;color:#cbd5e1;max-width:780px}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.flow-step{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px}
+.flow-step b{display:inline-block;background:var(--brand);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;margin-bottom:6px}
+.flow-step strong{display:block;font-size:13.5px}
+.flow-step small{display:block;color:#cbd5e1;font-size:12px;margin-top:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:grid;gap:14px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px;flex-wrap:wrap}
+.tag{display:inline-block;background:var(--brand-soft);color:var(--brand);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;border-radius:999px}
+.route{font-family:var(--mono);font-size:12px;background:var(--subtle);border:1px solid var(--line);padding:4px 9px;border-radius:8px;color:var(--ink2)}
+.card h2{margin:4px 0 0;font-size:20px}
+.lead{margin:0;color:var(--ink2)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.box{background:var(--subtle);border:1px solid var(--line);border-radius:12px;padding:14px}
+.box h3{margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.box ul,.box ol{margin:0;padding-left:18px;display:grid;gap:6px;font-size:13.5px}
+.cycle{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cycle span{background:var(--subtle);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600}
+.callout{border-radius:12px;padding:12px 14px;font-size:13.5px;border:1px solid}
+.callout.warn{background:var(--warn-bg);border-color:#fde68a;color:#78350f}
+.callout.ok{background:var(--ok-bg);border-color:#bbf7d0;color:#14532d}
+.callout.bad{background:var(--bad-bg);border-color:#fecaca;color:#7f1d1d}
+.table{width:100%;border-collapse:collapse;font-size:13.5px}
+.table th,.table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.table th{background:var(--subtle);font-size:12px;text-transform:uppercase;color:var(--muted)}
+.hidden{display:none!important}
+@media(max-width:1020px){.layout{grid-template-columns:1fr}.toc{position:static;max-height:none}.flow{grid-template-columns:repeat(2,minmax(0,1fr))}.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.grid2,.grid4,.flow{grid-template-columns:1fr}.layout{padding:14px}.search{min-width:100%}}
+@media print{.topbar,.toc{display:none!important}.layout{display:block;padding:0}.card,.hero{break-inside:avoid;border-color:#cbd5e1;box-shadow:none}}
+</style>
+</head>
+<body>
+<header class="topbar">
+ <div class="brand">
+  <div class="mark">OM</div>
+  <div>
+   <strong>Manual Completo de Usuario · OnlyMarket</strong>
+   <small>Guía integral para dueños, encargados, inventario y cajeros · by NanoLabs</small>
+  </div>
+ </div>
+ <div class="tools">
+  <input id="searchInput" class="search" type="search" placeholder="Filtrar manual (ej. carne, lote, caja, balanza, merma)...">
+  <button class="btn" type="button" onclick="window.print()">Imprimir / Guardar PDF</button>
+  <a class="btn btn-ghost" href="/">Volver al sistema</a>
+ </div>
+</header>
+
+<div class="layout">
+ <aside class="toc" aria-label="Índice del manual">
+  <h2>Contenido del manual</h2>
+  <div class="toc-group">
+   <small>Para empezar</small>
+   <a href="#como-funciona">Cómo funciona el sistema</a>
+   <a href="#primer-dia">Arranque en 10 minutos</a>
+   <a href="#glosario">Conceptos y palabras clave</a>
+  </div>
+  <div class="toc-group">
+   <small>Operación diaria</small>
+   <a href="#resumen">Resumen operativo (/)</a>
+   <a href="#pos">Terminal de caja (/pos)</a>
+   <a href="#alertas">Alertas y vencimientos (/alertas)</a>
+  </div>
+  <div class="toc-group">
+   <small>Ciclo de mercadería</small>
+   <a href="#catalogo">Productos e inventario (/catalogo)</a>
+   <a href="#proveedores">Proveedores (/proveedores)</a>
+   <a href="#recepcion">Compras y recepción (/inventario)</a>
+   <a href="#desposte">Desposte y carne (/transformaciones)</a>
+   <a href="#verduleria">Verdulería y frescos (/verduleria)</a>
+   <a href="#stock">Conteos y traslados (/stock)</a>
+   <a href="#reposicion">Reposición mínima (/reposicion)</a>
+   <a href="#trazabilidad">Trazabilidad y etiquetas</a>
+  </div>
+  <div class="toc-group">
+   <small>Ventas y negocio</small>
+   <a href="#promociones">Promociones y Combos</a>
+   <a href="#clientes">Clientes y puntos</a>
+   <a href="#ventas">Ventas, devoluciones y anulaciones</a>
+   <a href="#finanzas">Finanzas e Informes</a>
+  </div>
+  <div class="toc-group">
+   <small>Sistema y problemas</small>
+   <a href="#administracion">Sucursales, roles y perfil</a>
+   <a href="#faq">Problemas frecuentes (FAQ)</a>
+  </div>
+ </aside>
+
+ <main id="manualMain">
+  <section class="hero" id="como-funciona">
+   <div>
+    <span class="tag" style="background:rgba(255,102,0,.22);color:#fdba74">Manual Oficial OnlyMarket</span>
+    <h1 style="margin-top:8px">Entendé todo el sistema en una lectura clara</h1>
+    <p>OnlyMarket ordena tu comercio (supermercado, autoservicio, carnicería, fiambrería o verdulería) conectando compras, lotes con vencimiento, desposte, caja POS y rentabilidad real sin planillas sueltas.</p>
+   </div>
+   <div class="flow">
+    <div class="flow-step"><b>Paso 1</b><strong>Catálogo</strong><small>Creás artículos (por unidad o por kg) y su precio.</small></div>
+    <div class="flow-step"><b>Paso 2</b><strong>Compras</strong><small>Recibís facturas creando lotes con costo y vencimiento.</small></div>
+    <div class="flow-step"><b>Paso 3</b><strong>Desposte / Frescos</strong><small>Opcional: cortás medias reses o hormas repartiendo kilos y costo.</small></div>
+    <div class="flow-step"><b>Paso 4</b><strong>Caja POS</strong><small>Abrís turno en una sucursal y vendés descontando primero lo próximo a vencer.</small></div>
+    <div class="flow-step"><b>Paso 5</b><strong>Control y Ganancia</strong><small>Cerrás arqueo, ves márgenes reales, alertas y trazabilidad.</small></div>
+   </div>
+  </section>
+
+  <section class="card" id="primer-dia" data-search="arranque primer dia empezar configurar pasos iniciales">
+   <div class="card-head">
+    <div><span class="tag">Inicio rápido</span><h2>Si agarrás el sistema por primera vez: orden recomendado</h2></div>
+   </div>
+   <div class="grid2">
+    <div class="box">
+     <h3>Configuración inicial (una sola vez)</h3>
+     <ol>
+      <li>Entrá a <strong>Sucursales y equipo</strong> (<code>/administracion</code>) y creá tus locales o depósitos, más los usuarios para tus cajeros/encargados.</li>
+      <li>En <strong>Perfil del comercio</strong> (<code>/configuracion</code>) definí el prefijo de tu balanza PLU (si pesás con etiquetas) y reglas de socios.</li>
+      <li>En <strong>Proveedores</strong> cargá tus distribuidores y frigoríficos.</li>
+      <li>En <strong>Productos e inventario</strong> cargá tu catálogo (manual o importando un archivo CSV desde Excel).</li>
+     </ol>
+    </div>
+    <div class="box">
+     <h3>Rutina diaria de todos los días</h3>
+     <ol>
+      <li><strong>Mañana:</strong> revisá la campanita superior de notificaciones o <strong>Alertas</strong> para detectar vencimientos del día.</li>
+      <li><strong>Depósito:</strong> cargá facturas en <strong>Compras y recepción</strong> y hacé cortes en <strong>Desposte</strong> si trabajás carnicería/fiambrería.</li>
+      <li><strong>Caja:</strong> el cajero abre turno con el cambio inicial en <strong>Terminal de caja</strong> (en la sucursal que corresponde).</li>
+      <li><strong>Cierre:</strong> al terminar el turno, tocá <strong>Realizar arqueo</strong>, contá billetes y emití el comprobante de cierre.</li>
+     </ol>
+    </div>
+   </div>
+  </section>
+
+  <section class="card" id="glosario" data-search="glosario lote fefo plu arqueo merma revisar calidad costo total unitario">
+   <div class="card-head">
+    <div><span class="tag">Vocabulario simple</span><h2>6 palabras clave para entender todo</h2></div>
+   </div>
+   <div class="grid2">
+    <div class="box"><h3>Lote</h3><p style="margin:0;font-size:13.5px">Cada ingreso de mercadería es un <strong>lote físico separado</strong> con código propio, sucursal, costo de compra y fecha de vencimiento. Un mismo producto puede tener 3 lotes con fechas distintas.</p></div>
+    <div class="box"><h3>Regla FEFO</h3><p style="margin:0;font-size:13.5px">Significa <em>«primero en vencer, primero en salir»</em>. Cuando vendés en caja, el sistema descuenta automáticamente del lote con vencimiento más cercano para evitar pérdidas.</p></div>
+    <div class="box"><h3>Costo total del lote vs Unitario</h3><p style="margin:0;font-size:13.5px">Al recibir compras siempre cargás lo que pagaste por <strong>toda esa línea de mercadería</strong> (ej. 10 paquetes = $ 15.000), nunca el valor de 1 solo paquete.</p></div>
+    <div class="box"><h3>Revisar calidad / Bloqueado</h3><p style="margin:0;font-size:13.5px">Son estados de resguardo. Un lote vencido se bloquea solo y uno en revisión espera inspección. Mientras estén así <strong>no se pueden vender en caja</strong>.</p></div>
+    <div class="box"><h3>Merma vs Regalo</h3><p style="margin:0;font-size:13.5px"><strong>Merma</strong> es pérdida real (hueso, grasa, producto roto o vencido). <strong>Regalo</strong> es entrega sin cargo o muestra. Ambos bajan stock sin falsear la venta.</p></div>
+    <div class="box"><h3>Código PLU (balanza)</h3><p style="margin:0;font-size:13.5px">Número de 5 dígitos configurado en los productos por kilo. Cuando la balanza imprime un código de barras con prefijo, la caja lee el producto y los gramos exactos sola.</p></div>
+   </div>
+  </section>
+
+  <section class="card" id="resumen" data-search="resumen tablero inicio kpis ventas hora atencion">
+   <div class="card-head"><div><span class="tag">Operación diaria</span><h2>Resumen del negocio</h2></div><span class="route">/</span></div>
+   <p class="lead">Es tu pantalla de control general. Arriba tiene el mapa visual de los 5 pasos del negocio y abajo muestra facturación neta, ganancia bruta real del día, cajas abiertas y alertas urgentes.</p>
+   <div class="callout ok">Podés filtrar todo el tablero por una sucursal específica o ver todas juntas con el selector superior derecho.</div>
+  </section>
+
+  <section class="card" id="pos" data-search="pos terminal de caja vender cobrar efectivo tarjeta pago mixto pausar arqueo">
+   <div class="card-head"><div><span class="tag">Operación diaria</span><h2>Terminal de caja (POS)</h2></div><span class="route">/pos</span></div>
+   <p class="lead">Pantalla pensada para cobrar rápido en mostrador: a la izquierda buscás o tocás productos, y a la derecha ves el ticket en vivo y cobrás.</p>
+   <div class="cycle"><span>1. Abrir turno con fondo</span><span>2. Escanear / buscar artículos</span><span>3. Elegir cliente y promo</span><span>4. Cobrar y emitir ticket</span><span>5. Realizar arqueo</span></div>
+   <div class="grid2">
+    <div class="box">
+     <h3>Cómo vender paso a paso</h3>
+     <ol>
+      <li>Si no tenés caja abierta, elegí la <strong>Sucursal</strong>, cargá el efectivo inicial (cambio) y tocá <strong>Abrir caja</strong>.</li>
+      <li>Escaneá el código de barras o escribí parte del nombre / SKU en el buscador superior. Con <strong>Escaneo rápido</strong> activo, 1 clic o Enter ya suma 1 unidad al ticket.</li>
+      <li>Para productos por kilo, indicá los kilos (o escaneá la etiqueta de la balanza) y tocá <strong>Agregar</strong>.</li>
+      <li>Si el cliente pidió algo más, podés tocar <strong>Pausar venta</strong>, atender al siguiente y retomarla luego.</li>
+      <li>Elegí <strong>Efectivo</strong>, <strong>Débito</strong>, <strong>Crédito</strong>, <strong>Transferencia</strong> o <strong>Pago mixto</strong> (varios medios combinados) y tocá <strong>Confirmar venta</strong>.</li>
+     </ol>
+    </div>
+    <div class="box">
+     <h3>Arqueo, movimientos y atajos</h3>
+     <ul>
+      <li><strong>Ingreso / retiro:</strong> botón en la barra oscura superior para cargar plata de cambio o retirar efectivo durante el turno.</li>
+      <li><strong>Realizar arqueo:</strong> al final del turno contás los billetes del cajón, los cargás en <em>Efectivo contado</em> y se genera el cierre imprimible.</li>
+      <li><strong>Si buscás algo y dice «En otra sucursal»:</strong> es porque abriste la caja en una sucursal distinta a donde está el stock. Cerrá turno y abrí en la sucursal correcta.</li>
+      <li><strong>Atajos de teclado:</strong> <code>F2</code> enfoca buscador, <code>F4</code> va a cantidad, <code>F12</code> enfoca Confirmar venta.</li>
+     </ul>
+    </div>
+   </div>
+  </section>
+
+  <section class="card" id="alertas" data-search="alertas campana notificaciones vencimiento proximo vencer bloqueado revision">
+   <div class="card-head"><div><span class="tag">Operación diaria</span><h2>Alertas y campana de vencimientos</h2></div><span class="route">/alertas</span></div>
+   <p class="lead">Concentra todo lote que exige atención antes de perder plata: ya vencidos, próximos a vencer según los días configurados y pendientes de inspección.</p>
+   <div class="grid2">
+    <div class="box"><h3>Campanita superior</h3><p style="margin:0;font-size:13.5px">En todo el panel ves arriba el ícono de campana con la cantidad real de lotes vencidos o por vencer. Al abrirlo saltás directo al lote o a Promociones para liquidarlo a tiempo.</p></div>
+    <div class="box"><h3>Acciones recomendadas</h3><p style="margin:0;font-size:13.5px">Si un producto está por vencer en 2 días, creale una oferta en Promociones; si ya venció, el sistema lo bloquea automáticamente para proteger la venta y se da de baja como Merma.</p></div>
+   </div>
+  </section>
+
+  <section class="card" id="catalogo" data-search="catalogo productos inventario sku codigo barras precio csv importar masivo">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería · Paso 1</span><h2>Productos e inventario + Importar CSV</h2></div><span class="route">/catalogo</span></div>
+   <p class="lead">Es el catálogo maestro de tu comercio. Todo artículo debe existir acá antes de poder comprarlo, pesarlo o venderlo.</p>
+   <div class="grid2">
+    <div class="box">
+     <h3>Campos clave al crear un producto</h3>
+     <ul>
+      <li><strong>Unidad:</strong> <em>Unidad</em> (gaseosas, paquetes) o <em>Kilogramo</em> (carne, queso, verdura, pan).</li>
+      <li><strong>Sector:</strong> define dónde se agrupa en reportes, alertas y botones de caja.</li>
+      <li><strong>Avisar antes de vencer (días):</strong> con cuántos días de anticipación suena la alerta.</li>
+      <li><strong>Acceso rápido en POS:</strong> si marcás Sí, aparece fijado primero entre las tarjetas táctiles de Caja.</li>
+     </ul>
+    </div>
+    <div class="box">
+     <h3>Funciones extra sin perder tiempo</h3>
+     <ul>
+      <li><strong>Actualizar precios por sector:</strong> subí o bajá en bloque un % todos los productos de un rubro en segundos.</li>
+      <li><strong>Importar CSV (<code>/catalogo/importar</code>):</strong> descargá la plantilla lista para Excel, completala con tus productos y subila masivamente (no sobrescribe los existentes).</li>
+      <li><strong>Ver ficha ›:</strong> abre el detalle completo de lotes por sucursal, costo promedio y margen estimado.</li>
+     </ul>
+    </div>
+   </div>
+  </section>
+
+  <section class="card" id="proveedores" data-search="proveedores distribuidor frigorifico cuit telefono">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería</span><h2>Proveedores</h2></div><span class="route">/proveedores</span></div>
+   <p class="lead">Agenda de proveedores con seguimiento automático de cuánto se compró, cuánto pagaste y cuánto saldo queda pendiente con cada uno.</p>
+  </section>
+
+  <section class="card" id="recepcion" data-search="compras recepcion ingresar mercaderia factura remito lote costo">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería · Paso 2</span><h2>Compras y recepción</h2></div><span class="route">/inventario</span></div>
+   <p class="lead">Cada vez que llega mercadería del proveedor entra por acá. Genera lotes físicos trazables en una sucursal.</p>
+   <div class="grid2">
+    <div class="box">
+     <h3>¿Ingreso individual o factura múltiple?</h3>
+     <ul>
+      <li><strong>Recibir lote:</strong> ideal para 1 solo artículo rápido que llegó suelto.</li>
+      <li><strong>Nueva recepción (<code>/inventario?view=recepcion</code>):</strong> para cargar una factura entera de varios productos y verificar en vivo que la suma de lotes coincida con el total de la factura ($ 0,00 de diferencia).</li>
+     </ul>
+    </div>
+    <div class="box">
+     <h3>Control físico inferior</h3>
+     <p style="margin:0;font-size:13.5px">Debajo del historial tenés todos los lotes activos con accesos rápidos: <strong>Etiqueta</strong> (imprimir código/precio), <strong>Historial</strong> (trazabilidad), <strong>Registrar revisión</strong> (aprobar o bloquear) y <strong>Merma / regalo / apertura</strong>.</p>
+    </div>
+   </div>
+  </section>
+
+  <section class="card" id="desposte" data-search="desposte carne media res fraccionamiento horma cortes merma hueso grasa plantilla">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería · Paso 3</span><h2>Desposte y fraccionamiento (Carne y Fiambrería)</h2></div><span class="route">/transformaciones</span></div>
+   <p class="lead">Convierte una pieza comprada por kilo entera (ej. media res vacuna de 100 kg o horma de queso) en los cortes finales que vendés al mostrador, repartiendo el costo exacto sin perder centavos.</p>
+   <div class="callout warn"><strong>Requisito:</strong> el lote de origen (la media res o horma) tiene que haberse cargado como producto por <strong>Kilogramo</strong> y con <strong>Fecha de vencimiento</strong> en Compras y recepción.</div>
+   <div class="grid2">
+    <div class="box">
+     <h3>Paso a paso de un desposte</h3>
+     <ol>
+      <li>Entrá a <strong>Desposte y fraccionamiento → Nueva transformación</strong>.</li>
+      <li>Elegí el lote origen (ej. <code>Media res</code>) e ingresá el <strong>Peso a transformar (kg)</strong>.</li>
+      <li>Agregá cada corte comercial con Destino <strong>Corte / stock</strong> y su peso real en kg.</li>
+      <li>Cargá huesos, grasa y recortes descartados con Destino <strong>Merma</strong> (el sistema registra esa pérdida automáticamente).</li>
+      <li>Cuando <em>Diferencia pendiente</em> sea <strong>0,000 kg</strong>, confirmá con la casilla <strong>«Habilitar cortes directo para vender en Caja»</strong> tildada.</li>
+     </ol>
+    </div>
+    <div class="box">
+     <h3>Plantillas y habilitación rápida</h3>
+     <ul>
+      <li><strong>Plantillas:</strong> guardá tus estructuras de cortes habituales (ej. <em>Media res novillo estándar</em>) para no volver a elegir cada corte la próxima vez; solo completás los kilos del día.</li>
+      <li><strong>Si dejaste cortes sin aprobar al momento:</strong> aparecen listados arriba del historial para habilitarlos a Caja con 1 clic en <em>Habilitar para venta</em>.</li>
+      <li><strong>Vencimientos:</strong> los cortes heredan automáticamente el vencimiento del lote padre para nunca vender carne pasada.</li>
+     </ul>
+    </div>
+   </div>
+  </section>
+
+  <section class="card" id="verduleria" data-search="verduleria frescos fruta verdura frescura merma">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería</span><h2>Verdulería y frescos</h2></div><span class="route">/verduleria</span></div>
+   <p class="lead">Estación diaria para controlar la frescura de frutas, verduras y perecederos, revalidar lotes por más días o mandar el descarte rápido a merma en 2 clics.</p>
+  </section>
+
+  <section class="card" id="stock" data-search="conteos traslados sucursales faltante sobrante ajuste fisico">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería · Paso 4</span><h2>Conteos físicos y traslados</h2></div><span class="route">/stock</span></div>
+   <p class="lead">Sirve para igualar el stock del sistema con la realidad de las estanterías y para mover mercadería de un local/depósito a otro conservando su costo.</p>
+   <div class="callout warn">Por seguridad contable, los sobrantes encontrados en conteos y los lotes recién trasladados ingresan en destino en estado <strong>Revisar calidad</strong> hasta confirmar la recepción física.</div>
+  </section>
+
+  <section class="card" id="reposicion" data-search="reposicion stock minimo objetivo faltantes compra sugerida">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería</span><h2>Reposición inteligente</h2></div><span class="route">/reposicion</span></div>
+   <p class="lead">Configurá el stock mínimo y objetivo de cada producto por sucursal. Cuando las ventas hacen caer el stock apto por debajo del mínimo, aparece acá cuánto conviene comprar o trasladar.</p>
+  </section>
+
+  <section class="card" id="trazabilidad" data-search="trazabilidad historial lote origen etiquetas imprimir codigo barras">
+   <div class="card-head"><div><span class="tag">Ciclo de mercadería</span><h2>Trazabilidad y Etiquetas</h2></div><span class="route">/trazabilidad · /etiquetas/[id]</span></div>
+   <p class="lead">Buscá cualquier código de lote o factura para ver su historia completa: proveedor de ingreso, despostes derivados, traslados, mermas y cada ticket donde se vendió. Desde los lotes también podés imprimir etiquetas de góndola o de código EAN/PLU.</p>
+  </section>
+
+  <section class="card" id="promociones" data-search="promociones combos 2x1 3x2 descuento oferta paquete">
+   <div class="card-head"><div><span class="tag">Ventas y negocio</span><h2>Promociones y Combos</h2></div><span class="route">/promociones · /combos</span></div>
+   <p class="lead">Creá descuentos porcentuales (ej. 15% llevando 3 o más unidades, o por lote próximo a vencer), ofertas <code>NxM</code> (ej. llevá 3 pagá 2) o paquetes Combo entre fechas.</p>
+   <div class="callout ok">El cajero no tiene que acordarse ninguna oferta: la Terminal de caja detecta los artículos y aplica automáticamente el mayor descuento válido sin acumular rebajas duplicadas.</div>
+  </section>
+
+  <section class="card" id="clientes" data-search="clientes socios puntos fidelidad descuento canje">
+   <div class="card-head"><div><span class="tag">Ventas y negocio</span><h2>Clientes, socios y puntos</h2></div><span class="route">/clientes</span></div>
+   <p class="lead">Agenda de clientes frecuentes. Cuando el cajero asocia al cliente en Caja, obtiene su descuento de socio (configurado en Perfil del comercio) y acumula puntos según su gasto, que luego se canjean desde este módulo.</p>
+  </section>
+
+  <section class="card" id="ventas" data-search="ventas devolucion anulacion ticket reimprimir comprobante">
+   <div class="card-head"><div><span class="tag">Ventas y negocio</span><h2>Ventas, devoluciones y anulaciones</h2></div><span class="route">/ventas · /pos/ticket/[id]</span></div>
+   <p class="lead">Historial completo de comprobantes emitidos con reimpresión en formato 80mm / 58mm, anulación completa o devolución parcial por artículo eligiendo si la mercadería devuelta vuelve a Disponible o a Revisar calidad.</p>
+  </section>
+
+  <section class="card" id="finanzas" data-search="finanzas informes ganancia margen gastos pagos csv excel">
+   <div class="card-head"><div><span class="tag">Ventas y negocio</span><h2>Finanzas e Informes</h2></div><span class="route">/finanzas · /informes</span></div>
+   <p class="lead">Control económico real del comercio. <strong>Finanzas</strong> cruza ventas netas, costo exacto de los lotes vendidos, mermas registradas y gastos operativos cargados (luz, alquiler, fletes), más pagos a proveedores. <strong>Informes</strong> ordena qué productos y sucursales dejan más margen y te permite exportar todo a Excel (CSV).</p>
+  </section>
+
+  <section class="card" id="administracion" data-search="administracion sucursales equipo usuarios roles cajero encargado propietario configuracion">
+   <div class="card-head"><div><span class="tag">Sistema</span><h2>Sucursales, Roles y Perfil del comercio</h2></div><span class="route">/administracion · /configuracion · /auditoria</span></div>
+   <table class="table">
+    <thead><tr><th>Rol</th><th>Qué puede hacer en OnlyMarket</th></tr></thead>
+    <tbody>
+     <tr><td><strong>Propietario</strong></td><td>Acceso total: sucursales, empleados, permisos, configuración comercial, finanzas, informes, inventario y caja.</td></tr>
+     <tr><td><strong>Encargado</strong></td><td>Opera inventario completo, ventas, devoluciones, promociones, combos, finanzas, informes y caja.</td></tr>
+     <tr><td><strong>Inventario</strong></td><td>Carga catálogo, recibe compras, desposta, controla frescura, hace conteos y traslados (sin ver caja ni márgenes financieros).</td></tr>
+     <tr><td><strong>Cajero</strong></td><td>Entra directo a <strong>Terminal de caja</strong> y Centro de ayuda/Mi cuenta. No ve costos, compras ni configuración.</td></tr>
+    </tbody>
+   </table>
+  </section>
+
+  <section class="card" id="faq" data-search="faq dudas preguntas frecuentes problema no aparece sin stock ganancia caja">
+   <div class="card-head"><div><span class="tag">Ayuda rápida</span><h2>Preguntas frecuentes</h2></div></div>
+   <div class="grid2">
+    <div class="box"><h3>Busqué un producto en Caja y no aparece o dice «En otra sucursal»</h3><p style="margin:0;font-size:13.5px">Cada turno de caja vende el stock de la sucursal donde se abrió. Revisá arriba en POS qué sucursal dice; si el stock está en otra, hacé arqueo y abrí turno en esa sucursal (o trasladá la mercadería).</p></div>
+    <div class="box"><h3>Hice un desposte pero no veo los cortes en Caja</h3><p style="margin:0;font-size:13.5px">Asegurate de haber dejado tildado <em>Habilitar cortes directo para vender en Caja</em>, o entrá a Desposte y tocá <strong>Habilitar para venta</strong> en el cuadro superior de cortes pendientes.</p></div>
+    <div class="box"><h3>Cargué una compra grande hoy, ¿por qué no baja la ganancia?</h3><p style="margin:0;font-size:13.5px">Porque comprar stock no es perder plata: el dinero pasa a inventario. El costo se descuenta unidad por unidad cuando se vende o cuando registrás mermas/gastos.</p></div>
+    <div class="box"><h3>¿Dónde veo una guía rápida mientras trabajo?</h3><p style="margin:0;font-size:13.5px">Tocá el botón <strong><code>?</code></strong> arriba a la derecha en cualquier pantalla para abrir el Asistente por tareas según el módulo donde estés parado.</p></div>
+   </div>
+  </section>
+ </main>
+</div>
+
+<script>
+const input=document.getElementById("searchInput");
+const cards=[...document.querySelectorAll("main > section.card")];
+input.addEventListener("input",()=>{
+ const q=input.value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+ const tokens=q.split(/\s+/).filter(Boolean);
+ for(const card of cards){
+  if(!tokens.length){card.classList.remove("hidden");continue;}
+  const text=(card.textContent+" "+(card.dataset.search||"")).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  card.classList.toggle("hidden",!tokens.every(t=>text.includes(t)));
+ }
+});
+</script>
+</body>
+</html>
