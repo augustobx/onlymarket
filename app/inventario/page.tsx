@@ -8,6 +8,8 @@ import {receiveAction,reviewAction} from "../actions";
 import {Operation} from "../operations";
 import {Shell,Field,Notice,money,amount,states,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
+import {showTransform} from "../../src/domain/settings.mjs";
+import {WorkflowRail} from "../components/workflow-rail";
 import {Icon} from "../components/icons";
 import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import {lotOperationAction} from "./actions";
@@ -90,6 +92,7 @@ export default async function Page({
       </Link>
      }
     />
+    <WorkflowRail current="receive" showProduction={showTransform(s.profile)}/>
     {products.length&&suppliers.length&&branches.length?(
      <Purchase
       products={products.map(p=>({id:p.id,name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,unit:p.unit,sector:p.sector,price:money(p.salePriceCents)}))}
@@ -182,6 +185,8 @@ export default async function Page({
      </>
     }
    />
+
+   <WorkflowRail current="review" showProduction={showTransform(s.profile)}/>
 
    {!query.lot&&(
     <div className="om-dashgrid">

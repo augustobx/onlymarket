@@ -260,19 +260,19 @@ export const MODULE_GUIDES:ModuleGuide[]=[
   title:"Desposte y fraccionamiento",
   summary:"Conversión de una pieza mayorista (media res, horma, cajón) en cortes finales vendibles sin perder costo.",
   lifecycle:[
-   "Elegir lote origen",
-   "Cargar cortes, regalos y merma",
-   "Verificar balance kg",
-   "Generar lotes derivados",
+   "Recibir lote por kg con vencimiento",
+   "Elegir pieza origen y cargar cortes + merma",
+   "Cuadrar balance exacto a 0 kg",
+   "Habilitar cortes y vender en Caja",
   ],
   howTo:[
-   "Elegí la plantilla rápida o tocá «Nuevo fraccionamiento» seleccionando el lote origen y kilos a procesar.",
-   "Agregá cada corte de salida con su peso y destino (Stock vendible, Regalo o Merma).",
-   "Guardá plantillas de desposte para repetir los mismos cortes más rápido la próxima vez.",
+   "Elegí el lote origen (ej. media res) y cargá cuántos kilos vas a procesar en ese desposte.",
+   "Agregá cada corte (Destino: Corte/stock), el hueso o recorte (Merma) y regalos; el total debe igualar al peso de entrada.",
+   "Dejá tildada la casilla «Habilitar cortes directo para vender en Caja» (o aprobalos en 1 clic desde arriba del historial) y confirmá.",
   ],
   whatToExpect:[
-   "El peso total de salidas + mermas debe coincidir con el peso tomado del lote origen.",
-   "El costo de compra del lote original se reparte proporcionalmente entre los cortes vendibles y limita vencimientos.",
+   "El peso total de salidas + mermas coincide exacto con el peso de entrada y las pérdidas quedan registradas como merma.",
+   "El costo de compra se prorratea por kilo entre los cortes y las pérdidas; los lotes aprobados ya aparecen en Caja.",
   ],
  },
  {

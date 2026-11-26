@@ -8,6 +8,8 @@ import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
 import {Shell,Field,Notice,money,amount,fixed,states} from "../ui";
 import {PageHeader,SectionCard,EmptyState,InfoCallout} from "../components/retail-ui";
+import {showTransform} from "../../src/domain/settings.mjs";
+import {WorkflowRail} from "../components/workflow-rail";
 import {Icon} from "../components/icons";
 import {controlAction} from "./actions";
 
@@ -61,6 +63,8 @@ export default async function Page({
     subtitle="Ajuste de existencias con control de concurrencia y traslados entre sucursales."
     actions={query.lot?<Link className="actionlink secondarylink" href="/stock">Ver todos los lotes</Link>:undefined}
    />
+
+   <WorkflowRail current="review" showProduction={showTransform(s.profile)}/>
 
    <SectionCard title="Control de existencias" subtitle="Hasta 100 lotes coincidentes, incluidos agotados" icon="layers">
     <form method="get" className="v2-toolbar">

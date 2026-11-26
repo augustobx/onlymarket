@@ -75,7 +75,28 @@ export async function transformAction(f:FormData){
    const q=str(f,"quantity"+i);if(!q.trim())continue;
    outputs.push({quantityMilli:decimal(q,3,"Peso").toString(),productId:str(f,"product"+i),disposition:str(f,"disposition"+i),reason:str(f,"reason"+i)});
   }
-  await transformLot(db,s,{branchId:str(f,"branchId"),sourceLotId:str(f,"sourceLotId"),requestKey:str(f,"requestKey"),inputMilli:decimal(str(f,"input"),3,"Peso de entrada").toString(),outputs});
+  const batch=await transformLot(db,s,{branchId:str(f,"branchId"),sourceLotId:str(f,"sourceLotId"),requestKey:str(f,"requestKey"),inputMilli:decimal(str(f,"input"),3,"Peso de entrada").toString(),outputs});
+  if(str(f,"approveOutputs")==="yes"&&batch?.outputs?.length){
+   for(const out of batch.outputs){
+    await reviewLot(db,s,{lotId:out.id,decision:"AVAILABLE",reason:"Habilitado directo desde mesa de desposte"});
+   }
+  }
+  revalidatePath("/inventario");revalidatePath("/pos");revalidatePath("/catalogo");revalidatePath("/alertas");
+ });
+}
+export async function approveTransformLotAction(f:FormData){
+ const s=await manager();
+ await write("/transformaciones","review",async()=>{
+  const lotId=str(f,"lotId");
+  if(lotId==="__ALL__"){
+   const pending=await db.lot.findMany({where:{tenantId:s.tenantId,producedById:{not:null},status:"REVIEW",quantityMilli:{gt:0n}},select:{id:true},take:100});
+   for(const l of pending){
+    await reviewLot(db,s,{lotId:l.id,decision:"AVAILABLE",reason:"Habilitado directo en Desposte"});
+   }
+  }else{
+   await reviewLot(db,s,{lotId,decision:"AVAILABLE",reason:"Habilitado directo en Desposte"});
+  }
+  revalidatePath("/inventario");revalidatePath("/pos");revalidatePath("/catalogo");revalidatePath("/alertas");
  });
 }
 export async function reviewAction(f:FormData){

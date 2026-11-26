@@ -2,13 +2,14 @@ import Link from "next/link";
 import {randomUUID} from "node:crypto";
 import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
-import {deleteTemplate} from "../actions";
+import {deleteTemplate,approveTransformLotAction} from "../actions";
 import {classifyLot} from "../../src/domain/inventory.mjs";
 import {localDay} from "../../src/domain/parse.mjs";
 import {Operation} from "../operations";
 import {Shell,Notice,amount,money,sectors} from "../ui";
 import {PageHeader,SectionCard,EmptyState} from "../components/retail-ui";
 import {Icon,type IconName} from "../components/icons";
+import {WorkflowRail} from "../components/workflow-rail";
 import Editor from "./editor";
 
 export const dynamic="force-dynamic";
@@ -22,9 +23,10 @@ export default async function Page({
  if(s.role==="CASHIER")return <Shell title="Transformaciones"/>;
 
  const where={tenantId:s.tenantId};
- const [products,lots,templates,history]=await Promise.all([
+ const [products,lots,pendingOutputs,templates,history]=await Promise.all([
   db.product.findMany({where:{...where,unit:"KG",active:true},orderBy:{name:"asc"}}),
   db.lot.findMany({where:{...where,quantityMilli:{gt:0n},product:{unit:"KG"},status:"AVAILABLE"},include:{product:true,branch:true}}),
+  db.lot.findMany({where:{...where,quantityMilli:{gt:0n},producedById:{not:null},status:"REVIEW"},include:{product:true,branch:true},orderBy:{receivedAt:"desc"},take:40}),
   db.transformTemplate.findMany({where,orderBy:{name:"asc"}}),
   db.transformation.findMany({
    where,
@@ -68,6 +70,7 @@ export default async function Page({
       </Link>
      }
     />
+    <WorkflowRail current="transform"/>
     {eligible.length?(
      <Editor
       products={products.map(p=>({id:p.id,name:p.name,sku:p.sku,barcode:p.barcode,weightCode:p.weightCode,sector:sectors[p.sector as keyof typeof sectors],price:money(p.salePriceCents)}))}
@@ -124,6 +127,38 @@ export default async function Page({
      </Link>
     }
    />
+
+   <WorkflowRail current="transform"/>
+
+   {pendingOutputs.length>0&&(
+    <SectionCard
+     title={`Cortes en revisión listos para habilitar (${pendingOutputs.length})`}
+     subtitle="Estos lotes nacieron de despostes anteriores en Revisar calidad. Habilitalos a Caja desde aquí en 1 clic."
+     icon="check"
+     actions={
+      <form action={approveTransformLotAction}>
+       <input type="hidden" name="lotId" value="__ALL__"/>
+       <button>Habilitar todos para venta</button>
+      </form>
+     }
+     padded
+    >
+     <div>
+      {pendingOutputs.map(l=>(
+       <div className="om-record-row" key={l.id}>
+        <div>
+         <strong>{l.product.name} · {amount(l.quantityMilli,"KG")}</strong>
+         <small className="mono">{l.branch.name} · Lote {l.code}{l.expiresOn?" · Vence "+l.expiresOn.toISOString().slice(0,10):""}</small>
+        </div>
+        <form action={approveTransformLotAction}>
+         <input type="hidden" name="lotId" value={l.id}/>
+         <button type="submit" className="secondary">Habilitar para venta</button>
+        </form>
+       </div>
+      ))}
+     </div>
+    </SectionCard>
+   )}
 
    <div className="om-grid3">
     {areas.map(([title,subtitle,href,icon])=>(

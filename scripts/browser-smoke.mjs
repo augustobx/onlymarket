@@ -245,6 +245,8 @@ try {
   await page.getByRole("button",{name:"Confirmar transformación"}).click();
   await page.getByRole("status").waitFor();
   assert.equal(await db.transformation.count({where:{tenantId:tenant.id,sourceLotId:cheeseLot.id}}),1);
+  const transformedCut=await db.lot.findFirstOrThrow({where:{tenantId:tenant.id,producedById:{not:null}}});
+  assert.equal(transformedCut.status,"AVAILABLE");
   await page.goto(tenantBase+"/catalogo");
   await visual("v2-catalogo");
   await page.getByRole("row").filter({hasText:"Queso smoke"}).getByRole("button",{name:"Ver ficha ›"}).click();

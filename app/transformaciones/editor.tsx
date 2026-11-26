@@ -256,9 +256,10 @@ export default function Editor({
        </div>
       </SectionCard>
 
-      <InfoCallout icon="info" tone="warning">
-       Las salidas comerciales quedan retenidas para revisión antes de venderse en POS.
-      </InfoCallout>
+      <label className="scanmode" style={{margin:"10px 0"}}>
+       <input type="checkbox" name="approveOutputs" value="yes" defaultChecked/>
+       <span>Habilitar cortes directo para vender en Caja (si lo destildás, quedan en Revisión)</span>
+      </label>
 
       <Submit valid={valid}/>
      </aside>
