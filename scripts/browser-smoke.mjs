@@ -554,8 +554,11 @@ try {
 
   await page.goto(tenantBase + "/catalogo");
   await page.getByRole("button", { name: "Ayuda: Productos e inventario" }).click();
-  await page.getByRole("dialog").getByRole("heading", { name: "Productos e inventario" }).waitFor();
-  await page.getByRole("dialog").getByRole("button", { name: "Entendido" }).click();
+  const helpDialog = page.getByRole("dialog");
+  await helpDialog.getByRole("heading", { name: "Productos e inventario" }).waitFor();
+  await helpDialog.getByRole("button", { name: /¿Cómo cargo un ingreso de carne/ }).first().click();
+  await helpDialog.getByRole("link", { name: "Ir a Recibir mercadería" }).waitFor();
+  await helpDialog.getByRole("button", { name: "Entendido" }).click();
   await page.getByRole("link", { name: "Centro de ayuda" }).click();
   await page.getByRole("heading", { name: "Centro de ayuda y guías del sistema" }).waitFor();
   await page.getByLabel("Buscar guía o tema").fill("arqueo");
