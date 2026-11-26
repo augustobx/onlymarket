@@ -91,6 +91,7 @@ export default function Cart({
  const quantityRef=useRef<HTMLInputElement>(null);
  const [fast,setFast]=useState(true);
  const [scanOpen,setScanOpen]=useState(false);
+ const [suggestIndex,setSuggestIndex]=useState(0);
  const [customerId,setCustomerId]=useState("");
  const [parked,setParked]=useState<ParkedSale[]>([]);
  const decoded=decodeWeight(search.trim(),weightPrefix);
@@ -205,7 +206,21 @@ export default function Cart({
   }
  }
 
- const choose=()=>{
+ const pickLotOrFast=(lot:Option,pref?:string)=>{
+  if(fast&&lot.unit==="UNIT"){
+   add(lot.id,"1");
+   return;
+  }
+  setSelected(lot.id);
+  setSearch("");
+  setScanOpen(false);
+  setQty(pref??(decoded?fixed(BigInt(decoded.quantityMilli),3):lot.unit==="KG"?"":"1"));
+  setError("");
+  setInfo(`Seleccionado: ${lot.name} · Lote ${lot.code}`);
+  quantityRef.current?.focus();
+ };
+
+ const choose=(fromKeyboard=false)=>{
   setInfo("");
   if(decoded){
    const candidates=matches;
@@ -235,6 +250,7 @@ export default function Cart({
   if(exact.length>=1&&productIds.size===1){
    const firstAvailable=exact.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>0n)??exact[0];
    const isExactLotCode=exact.length===1&&exact[0].code===trimmed;
+   setScanOpen(false);
    if(fast&&firstAvailable.unit==="UNIT"){
     if(isExactLotCode)add(firstAvailable.id,"1");
     else addProductFEFO(firstAvailable.productId,"1");
@@ -245,16 +261,54 @@ export default function Cart({
    setError("");
    if(exact.length>1)setInfo(`Lote sugerido por FEFO (${firstAvailable.code}). Podés cambiarlo en la lista.`);
    quantityRef.current?.focus();
-  }else{
-   setSelected("");
-   setError(
-    exact.length>1
-     ?"Hay varios productos con ese código: seleccioná el lote físico de la lista."
-     :matches.length===0
-      ?"Producto o código no encontrado / sin stock"
-      :"Seleccioná un producto y su lote."
-   );
+   return;
   }
+
+  const matchedProductIds=new Set(matches.map(l=>l.productId));
+  if(exact.length===0&&trimmed&&matchedProductIds.size===1){
+   const onlyLot=matches.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>0n)??matches[0];
+   if(onlyLot){
+    setScanOpen(false);
+    if(fast&&onlyLot.unit==="UNIT"){
+     addProductFEFO(onlyLot.productId,"1");
+     return;
+    }
+    setSelected(onlyLot.id);
+    setSearch("");
+    setQty(onlyLot.unit==="UNIT"?"1":"");
+    setError("");
+    if(matches.length>1)setInfo(`Lote sugerido por FEFO (${onlyLot.code}).`);
+    else setInfo(`Seleccionado: ${onlyLot.name} · Lote ${onlyLot.code}`);
+    quantityRef.current?.focus();
+    return;
+   }
+  }
+
+  if(fromKeyboard&&scanOpen&&trimmed&&matches.length>0){
+   const activeLot=matches[Math.min(suggestIndex,Math.min(11,matches.length-1))];
+   if(activeLot){
+    pickLotOrFast(activeLot);
+    return;
+   }
+  }
+
+  if(matches.length>0&&trimmed){
+   setError("");
+   setScanOpen(true);
+   setSuggestIndex(0);
+   setInfo(`Encontramos ${matchedProductIds.size} productos coincidentes. Usá ↑ ↓ + Enter o hacé clic.`);
+   scanRef.current?.focus();
+   return;
+  }
+
+  setSelected("");
+  setError(
+   exact.length>1
+    ?"Hay varios productos con ese código: seleccioná el lote físico de la lista."
+    :matches.length===0
+     ?"Producto o código no encontrado / sin stock"
+     :"Escribí un nombre, SKU, código o seleccioná un lote."
+  );
  };
 
  function add(id=selected,quantity=qty){
@@ -443,56 +497,71 @@ export default function Cart({
           setSearch(val);
           setSelected("");
           setInfo("");
+          setError("");
+          setSuggestIndex(0);
           setScanOpen(Boolean(val.trim()));
          }}
-         onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setScanOpen(false);choose();}}}
-         placeholder="Escanear código EAN, PLU o buscar por nombre, SKU, lote o sector..."
+         onKeyDown={e=>{
+          const count=Math.min(12,matches.length);
+          if(e.key==="ArrowDown"&&count>0){
+           e.preventDefault();
+           if(!scanOpen)setScanOpen(true);
+           else setSuggestIndex(i=>Math.min(count-1,i+1));
+          }else if(e.key==="ArrowUp"&&scanOpen){
+           e.preventDefault();
+           setSuggestIndex(i=>Math.max(0,i-1));
+          }else if(e.key==="Escape"&&scanOpen){
+           e.preventDefault();
+           setScanOpen(false);
+          }else if(e.key==="Enter"){
+           e.preventDefault();
+           choose(true);
+          }
+         }}
+         placeholder="Escribí nombre, marca, SKU, PLU o escaneá código de barras..."
         />
        </label>
-       {scanOpen&&search.trim()&&matches.length>0&&(
+       {scanOpen&&search.trim()&&(
         <div className="v2-pos-suggest" role="listbox" aria-label="Coincidencias rápidas en POS">
-         {lotPickerItems.slice(0,12).map((item,idx)=>{
-          const lot=matches[idx];
-          return (
-           <button
-            key={item.id}
-            type="button"
-            role="option"
-            aria-selected={selected===item.id}
-            className={"om-picker-opt"+(selected===item.id?" selected":"")}
-            onMouseDown={e=>{
-             e.preventDefault();
-             setScanOpen(false);
-             if(fast&&lot.unit==="UNIT"){
-              add(lot.id,"1");
-             }else{
-              setSelected(lot.id);
-              setSearch("");
-              setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):lot.unit==="KG"?"":"1");
-              setInfo(`Seleccionado: ${lot.name} · Lote ${lot.code}`);
-              quantityRef.current?.focus();
-             }
-            }}
-           >
-            <div className="om-picker-opt__main">
-             <div className="om-picker-opt__head">
-              <strong>{item.title}</strong>
-              {item.badge&&<span className="om-picker-badge">{item.badge}</span>}
+         {lotPickerItems.length>0?(
+          lotPickerItems.slice(0,12).map((item,idx)=>{
+           const lot=matches[idx];
+           const isActive=idx===suggestIndex;
+           return (
+            <button
+             key={item.id}
+             type="button"
+             role="option"
+             aria-selected={selected===item.id||isActive}
+             className={"om-picker-opt"+(isActive?" active":"")+(selected===item.id?" selected":"")}
+             onMouseEnter={()=>setSuggestIndex(idx)}
+             onMouseDown={e=>{
+              e.preventDefault();
+              pickLotOrFast(lot);
+             }}
+            >
+             <div className="om-picker-opt__main">
+              <div className="om-picker-opt__head">
+               <strong>{item.title}</strong>
+               {item.badge&&<span className="om-picker-badge">{item.badge}</span>}
+              </div>
+              {item.subtitle&&<small className="mono">{item.subtitle}</small>}
+              {item.meta&&<small>{item.meta}</small>}
              </div>
-             {item.subtitle&&<small className="mono">{item.subtitle}</small>}
-             {item.meta&&<small>{item.meta}</small>}
-            </div>
-            <div className="om-picker-opt__right mono">
-             {item.price&&<strong>{item.price}</strong>}
-             {item.stock&&<small>{item.stock}</small>}
-            </div>
-           </button>
-          );
-         })}
+             <div className="om-picker-opt__right mono">
+              {item.price&&<strong>{item.price}</strong>}
+              {item.stock&&<small>{item.stock}</small>}
+             </div>
+            </button>
+           );
+          })
+         ):(
+          <div className="om-picker-empty">Sin productos disponibles para &ldquo;{search}&rdquo;</div>
+         )}
         </div>
        )}
       </div>
-      <button type="button" className="secondary" onClick={()=>{setScanOpen(false);choose();}}>
+      <button type="button" className="secondary" onMouseDown={e=>e.preventDefault()} onClick={()=>choose(false)}>
        <Icon name="search" size={16}/>
        <span>Buscar</span>
       </button>
@@ -501,21 +570,21 @@ export default function Cart({
      <div className="om-pos-scan-bar">
       <label className="scanmode">
        <input type="checkbox" checked={fast} onChange={e=>{setFast(e.target.checked);scanRef.current?.focus();}}/>
-       <span>Escaneo rápido (asigna lote por FEFO automáticamente)</span>
+       <span>Escaneo rápido (1 clic / Enter suma por FEFO)</span>
       </label>
       {weightPrefix&&(
        <span className="status AVAILABLE">
-        Balanza prefijo {weightPrefix}
+        Balanza {weightPrefix}
        </span>
       )}
      </div>
 
      <div className="v2-pos-pick">
       <label>
-       Producto y lote
+       Lote específico (opcional)
        <SearchPicker
         ariaLabel="Producto y lote"
-        placeholder={`Buscar entre ${matches.length} lotes por nombre, SKU, EAN o lote...`}
+        placeholder={`Elegir lote manual (${matches.length} disponibles)...`}
         items={lotPickerItems}
         value={selected}
         onChange={id=>{

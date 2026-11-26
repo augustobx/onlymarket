@@ -83,7 +83,8 @@ export function SearchPicker({
   const spaceAbove=rect.top-12;
   const openAbove=spaceBelow<220&&spaceAbove>spaceBelow;
   const maxHeight=Math.max(160,Math.min(340,openAbove?spaceAbove:spaceBelow));
-  const width=Math.max(rect.width,340);
+  const maxWidth=Math.max(260,window.innerWidth-16);
+  const width=Math.min(Math.max(rect.width,400),maxWidth);
   const left=Math.max(8,Math.min(rect.left,window.innerWidth-width-8));
   const top=openAbove?Math.max(8,rect.top-maxHeight-6):rect.bottom+6;
   setCoords({top,left,width,maxHeight});

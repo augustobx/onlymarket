@@ -10,7 +10,7 @@ import {getCustomerPointsSummary} from "../../src/server/loyalty.mjs";
 import {logoutAction} from "../actions";
 import {Operation} from "../operations";
 import {Shell,Notice,Field,money} from "../ui";
-import {KpiCard,SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
+import {SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
 import {Icon} from "../components/icons";
 import {openAction,closeAction,cashMovementAction} from "./actions";
 import Cart from "./cart";
@@ -182,11 +182,48 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
       />
 
       <div className="v2-posadmin">
-       <SectionCard
-        title={`Turno actual · ${shift.branch.name}`}
-        subtitle="Totales cobrados antes de reintegros"
-        icon="wallet"
-        actions={
+       <div className="om-pos-shiftbar">
+        <div className="om-pos-shiftbar__metrics">
+         <div className="om-pos-shiftpill">
+          <span>Turno {shift.branch.name}</span>
+          <strong>{formatMoney(shift.openingCents)}</strong>
+         </div>
+         <div className="om-pos-shiftpill om-pos-shiftpill--highlight">
+          <span>Efectivo esperado</span>
+          <strong>{formatMoney(expected)}</strong>
+         </div>
+         {paymentTotals.map(([label,value])=>(
+          <div className="om-pos-shiftpill" key={label}>
+           <span>{label}</span>
+           <strong>{formatMoney(value)}</strong>
+          </div>
+         ))}
+        </div>
+        <div className="om-pos-shiftbar__actions">
+         <Operation
+          title="Movimientos de efectivo"
+          trigger="Ingreso / retiro"
+          variant="secondary"
+          description="Aportes o retiros de efectivo durante el turno. Si corresponde a un gasto o pago a proveedor, registralo también en Finanzas."
+         >
+          <form action={cashMovementAction} className="fields">
+           <input type="hidden" name="shiftId" value={shift.id}/>
+           <input type="hidden" name="requestKey" value={randomUUID()}/>
+           <Field label="Tipo">
+            <select name="kind">
+             <option value="IN">Ingreso</option>
+             <option value="OUT">Retiro</option>
+            </select>
+           </Field>
+           <Field label="Importe ($)">
+            <input name="amount" inputMode="decimal" required/>
+           </Field>
+           <Field label="Motivo">
+            <input name="reason" maxLength={300} required/>
+           </Field>
+           <button>Registrar movimiento</button>
+          </form>
+         </Operation>
          <Operation
           title="Cierre de caja"
           trigger="Realizar arqueo"
@@ -201,48 +238,29 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
            <button>Cerrar caja</button>
           </form>
          </Operation>
-        }
-       >
-        <div className="v2-pos-turn-summary">
-         <div className="om-kpi-grid">
-          <KpiCard label="Fondo inicial" value={formatMoney(shift.openingCents)} hint="Apertura del turno" icon="banknote" tone="brand"/>
-          <KpiCard label="Efectivo esperado" value={formatMoney(expected)} hint="Incluye ingresos, retiros y reintegros" icon="wallet" tone="success"/>
-          {paymentTotals.slice(0,2).map(([label,value])=>(
-           <KpiCard key={label} label={`${label} cobrado`} value={formatMoney(value)} hint="Ventas vigentes del turno" icon="creditCard"/>
-          ))}
-         </div>
-         <div className="om-kpi-grid" style={{marginBottom:0}}>
-          {paymentTotals.slice(2).map(([label,value])=>(
-           <KpiCard key={label} label={`${label} cobrado`} value={formatMoney(value)} hint="Ventas vigentes del turno" icon="landmark"/>
-          ))}
-         </div>
         </div>
-       </SectionCard>
+       </div>
 
        <div className="om-dashgrid">
-        <SectionCard title="Últimas ventas del turno" subtitle="Hasta 30 comprobantes recientes" icon="receipt">
+        <SectionCard title="Últimas ventas del turno" subtitle="Comprobantes recientes de esta sesión" icon="receipt">
          {sales.length>0?(
           <div className="tablewrap">
            <table>
             <thead>
              <tr>
               <th>Hora</th>
-              <th>Operación</th>
               <th>Pago</th>
               <th>Importe</th>
-              <th>Vuelto</th>
               <th>Estado</th>
               <th>Ticket</th>
              </tr>
             </thead>
             <tbody>
-             {sales.map(v=>(
+             {sales.slice(0,10).map(v=>(
               <tr key={v.id}>
                <td className="mono">{v.createdAt.toLocaleTimeString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit"})}</td>
-               <td className="mono">{v.id.slice(0,8)}</td>
                <td>{labels[v.payment]}</td>
                <td className="mono"><strong>{money(v.totalCents)}</strong></td>
-               <td className="mono">{v.changeCents===null?"—":money(v.changeCents)}</td>
                <td>
                 <span className={"status "+(v.cancellation?"BLOCKED":v.returns.length?"REVIEW":"AVAILABLE")}>
                  {v.cancellation?"Anulada":v.returns.length?"Con devoluciones":"Registrada"}
@@ -264,41 +282,10 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
          )}
         </SectionCard>
 
-        <SectionCard
-         title="Movimientos de efectivo"
-         subtitle="Ingresos y retiros de caja"
-         icon="banknote"
-         actions={
-          <Operation
-           title="Movimientos de efectivo"
-           trigger="Registrar ingreso / retiro"
-           variant="secondary"
-           description="Aportes o retiros de efectivo durante el turno. Si corresponde a un gasto o pago a proveedor, registralo también en Finanzas."
-          >
-           <form action={cashMovementAction} className="fields">
-            <input type="hidden" name="shiftId" value={shift.id}/>
-            <input type="hidden" name="requestKey" value={randomUUID()}/>
-            <Field label="Tipo">
-             <select name="kind">
-              <option value="IN">Ingreso</option>
-              <option value="OUT">Retiro</option>
-             </select>
-            </Field>
-            <Field label="Importe ($)">
-             <input name="amount" inputMode="decimal" required/>
-            </Field>
-            <Field label="Motivo">
-             <input name="reason" maxLength={300} required/>
-            </Field>
-            <button>Registrar movimiento</button>
-           </form>
-          </Operation>
-         }
-         padded
-        >
+        <SectionCard title="Movimientos de efectivo" subtitle="Ingresos y retiros del turno actual" icon="banknote" padded>
          {movements.length>0?(
           <div>
-           {movements.map(m=>(
+           {movements.slice(0,8).map(m=>(
             <div className="om-record-row" key={m.id}>
              <div>
               <strong>{m.kind==="IN"?"Ingreso":"Retiro"} · {m.reason}</strong>
@@ -311,7 +298,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{error?:
            ))}
           </div>
          ):(
-          <EmptyState icon="banknote" title="Sin movimientos" description="No hay ingresos ni retiros de efectivo en este turno."/>
+          <EmptyState icon="banknote" title="Sin movimientos" description="Usá Ingreso / retiro en la barra de caja si agregás o retirás efectivo."/>
          )}
         </SectionCard>
        </div>

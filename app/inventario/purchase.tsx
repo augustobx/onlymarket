@@ -112,8 +112,8 @@ export default function Purchase({
          <tr>
           <th>Producto</th>
           <th>Lote</th>
-          <th>Cantidad</th>
-          <th>Costo total del lote ($)</th>
+          <th>Cant.</th>
+          <th>Costo lote ($)</th>
           <th>Vencimiento</th>
           <th></th>
          </tr>

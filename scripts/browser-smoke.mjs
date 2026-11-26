@@ -130,7 +130,11 @@ try {
     await input.click();
     await input.fill(query);
     const listbox = page.getByRole("listbox", { name: label, exact: true });
-    await listbox.getByRole("option").filter({ hasText: optionText }).first().click();
+    const opt = listbox.getByRole("option").filter({ hasText: optionText }).first();
+    await opt.waitFor();
+    const noHorizScroll = await listbox.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+    assert.ok(noHorizScroll, `Expected zero horizontal scroll in SearchPicker (${label})`);
+    await opt.click();
   };
 
   await page.goto(tenantBase + "/inventario");
@@ -153,7 +157,10 @@ try {
   await page.getByLabel("Buscar / escanear código").fill("yerb");
   const posSuggest = page.getByRole("listbox", { name: "Coincidencias rápidas en POS" });
   await posSuggest.getByRole("option").filter({ hasText: "SMOKE-001" }).first().waitFor();
+  assert.ok(await posSuggest.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), "POS suggest must not scroll horizontally");
   assert.match(await posSuggest.innerText(), /2500,00/);
+  await page.getByLabel("Buscar / escanear código").press("Enter");
+  await page.getByText(/Seleccionado: Yerba smoke/).waitFor();
   await page.getByLabel("Buscar / escanear código").fill("4006381333931");
   await page.getByLabel("Buscar / escanear código").press("Enter");
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
@@ -217,6 +224,10 @@ try {
   const expiry=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
   await page.getByLabel("Vencimiento 1",{exact:true}).fill(expiry);
   await visual("v2-recepcion");
+  assert.ok(
+    await page.locator(".v2-station-grid .tablewrap").first().evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    "Reception table must not scroll horizontally on desktop"
+  );
   await page.getByRole("button",{name:"Registrar compra completa"}).click();
   await page.getByRole("status").waitFor();
   const cheeseLot=await db.lot.findFirstOrThrow({where:{tenantId:tenant.id,code:"V2-SMOKE-CHEESE"}});
