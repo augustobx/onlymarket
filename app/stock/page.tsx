@@ -9,7 +9,7 @@ import {Operation} from "../operations";
 import {Shell,Field,Notice,money,amount,fixed,states} from "../ui";
 import {PageHeader,SectionCard,EmptyState,InfoCallout} from "../components/retail-ui";
 import {Icon} from "../components/icons";
-import {controlAction} from "./actions";
+import {controlAction,approveStockLotAction} from "./actions";
 
 export const dynamic="force-dynamic";
 
@@ -80,7 +80,7 @@ export default async function Page({
 
     <div className="om-card__body--pad" style={{paddingBottom:0}}>
      <InfoCallout icon="info">
-      Los faltantes se contabilizan como pérdida; los sobrantes requieren costo documentado y quedan en revisión. Traslados entre sucursales ingresan en revisión en destino.
+      Los faltantes se contabilizan como pérdida; los sobrantes requieren costo documentado y quedan en revisión. Podés habilitar directo los traslados al enviarlos o aprobar lotes en revisión desde esta tabla.
      </InfoCallout>
     </div>
 
@@ -147,6 +147,13 @@ export default async function Page({
                </form>
               </Operation>
              )}
+             {state==="REVIEW"&&l.quantityMilli>0n&&l.product.active&&(
+              <form action={approveStockLotAction}>
+               <input type="hidden" name="lotId" value={l.id}/>
+               <input type="hidden" name="reason" value="Habilitado en sucursal"/>
+               <button className="secondary">Habilitar para venta</button>
+              </form>
+             )}
              {canTransfer&&(
               <Operation title={"Traslado · "+l.product.name} trigger="Trasladar stock" variant="secondary">
                <form action={controlAction} className="fields">
@@ -161,6 +168,10 @@ export default async function Page({
                 </Field>
                 <Field label="Cantidad a trasladar"><input name="quantity" inputMode="decimal" required/></Field>
                 <Field label="Motivo / referencia"><input name="reason" required maxLength={300}/></Field>
+                <label style={{display:"flex",alignItems:"center",gap:8}}>
+                 <input type="checkbox" name="approveDestination" value="yes" defaultChecked/>
+                 <span>Habilitar directo para vender en sucursal destino</span>
+                </label>
                 <button>Confirmar traslado</button>
                </form>
               </Operation>

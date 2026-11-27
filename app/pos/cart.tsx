@@ -69,6 +69,8 @@ const fixed=(n:bigint,scale:number)=>{
  return a.slice(0,-scale)+"."+a.slice(-scale);
 };
 const money=(n:bigint)=>"$ "+fixed(n,2).replace(".",",");
+const formatHintQty=(quantity:string,unit:string)=>`${fixed(BigInt(quantity),3).replace(/\.000$/,"")} ${unit==="KG"?"kg":"u."}`;
+const formatBranchList=(hint:CatalogHint)=>hint.otherBranches.map(b=>`${b.branchName} (${formatHintQty(b.quantity,hint.unit)})`).join(", ");
 
 function Submit({disabled}:{disabled:boolean}){
  const {pending}=useFormStatus();
@@ -248,8 +250,12 @@ export default function Cart({
  const explainMissingHint=(hint:CatalogHint)=>{
   setScanOpen(false);
   if(hint.otherBranches.length>0){
-   const where=hint.otherBranches.map(b=>`${b.branchName} (${fixed(BigInt(b.quantity),hint.unit==="KG"?3:0).replace(/\.000$/,"")} ${hint.unit==="KG"?"kg":"u."})`).join(", ");
-   setError(`"${hint.name}" no tiene stock en ${branchName||"esta sucursal"}. Disponible en: ${where}.`);
+   const where=formatBranchList(hint);
+   setError(
+    hint.hasBlockedInBranch
+     ?`"${hint.name}" tiene lotes vencidos o en revisión en ${branchName||"esta sucursal"}. Disponible en: ${where}.`
+     :`"${hint.name}" no tiene stock en ${branchName||"esta sucursal"}. Disponible en: ${where}.`
+   );
   }else if(hint.hasBlockedInBranch){
    setError(`"${hint.name}" tiene lotes en ${branchName||"esta sucursal"}, pero están vencidos o en revisión.`);
   }else{
@@ -634,8 +640,11 @@ export default function Cart({
          })}
 
          {catalogMatches.map(hint=>{
+          const where=hint.otherBranches.length>0?formatBranchList(hint):"";
           const branchInfo=hint.otherBranches.length>0
-           ?"Disponible en: "+hint.otherBranches.map(b=>`${b.branchName} (${fixed(BigInt(b.quantity),hint.unit==="KG"?3:0).replace(/\.000$/,"")} ${hint.unit==="KG"?"kg":"u."})`).join(", ")
+           ?(hint.hasBlockedInBranch
+            ?`En ${branchName||"esta sucursal"} hay lotes vencidos o en revisión · Disponible en: ${where}`
+            :`Disponible en: ${where}`)
            :hint.hasBlockedInBranch
             ?`En ${branchName||"esta sucursal"} solo hay lotes vencidos o en revisión`
             :"Sin stock ingresado en ninguna sucursal";
