@@ -2631,6 +2631,28 @@ td small {
   font-family: var(--font-mono);
 }
 
+.om-pos-qtyinput {
+  width: 52px;
+  min-height: 32px;
+  height: 32px;
+  padding: 2px 6px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.om-pos-qtyinput--kg {
+  width: 74px;
+}
+
+.om-pos-kg-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .v2-cartactions {
   display: flex;
   align-items: center;

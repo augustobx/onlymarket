@@ -82,6 +82,104 @@ function Submit({disabled}:{disabled:boolean}){
  );
 }
 
+function TicketQtyEditor({
+ lot,
+ n,
+ onStepMinus,
+ onStepPlus,
+ onCommitMilli,
+ onRemove,
+ onError,
+}:{
+ lot:Option;
+ n:bigint;
+ onStepMinus:()=>void;
+ onStepPlus:()=>void;
+ onCommitMilli:(nextMilli:bigint)=>void;
+ onRemove:()=>void;
+ onError:(msg:string)=>void;
+}){
+ const maxQty=BigInt(lot.quantity);
+ const formatVal=(val:bigint)=>lot.unit==="UNIT"?(val/1000n).toString():fixed(val,3);
+ const [draft,setDraft]=useState(()=>formatVal(n));
+ useEffect(()=>{setDraft(formatVal(n));},[n,lot.unit]);
+
+ if(lot.unit==="UNIT"){
+  return (
+   <div className="qtybuttons">
+    <button type="button" className="secondary" aria-label={"Restar una unidad de "+lot.name} onClick={onStepMinus}>
+     −
+    </button>
+    <input
+     type="text"
+     inputMode="numeric"
+     className="om-pos-qtyinput"
+     aria-label={"Cantidad de "+lot.name}
+     value={draft}
+     onFocus={e=>e.currentTarget.select()}
+     onChange={e=>{
+      const v=e.target.value;
+      setDraft(v);
+      if(!/^\d+$/.test(v))return;
+      const parsed=BigInt(v)*1000n;
+      if(parsed===0n)return;
+      if(parsed>maxQty){onError(`Stock insuficiente en lote ${lot.code} (máx. ${maxQty/1000n} u.)`);return;}
+      onError("");
+      onCommitMilli(parsed);
+     }}
+     onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}}}
+     onBlur={()=>{
+      const t=draft.trim();
+      if(t==="0"){onRemove();return;}
+      if(!/^\d+$/.test(t)||BigInt(t)*1000n>maxQty){setDraft(formatVal(n));}
+     }}
+    />
+    <button
+     type="button"
+     className="secondary"
+     aria-label={"Sumar una unidad de "+lot.name}
+     disabled={n+1000n>maxQty}
+     onClick={onStepPlus}
+    >
+     +
+    </button>
+   </div>
+  );
+ }
+
+ return (
+  <label className="om-pos-kg-edit">
+   <input
+    type="text"
+    inputMode="decimal"
+    className="om-pos-qtyinput om-pos-qtyinput--kg"
+    aria-label={"Peso en kg de "+lot.name}
+    value={draft}
+    onFocus={e=>e.currentTarget.select()}
+    onChange={e=>{
+     const v=e.target.value;
+     setDraft(v);
+     try{
+      const parsed=decimal(v,3,"Cantidad");
+      if(parsed>maxQty){onError(`Stock insuficiente en lote ${lot.code} (máx. ${fixed(maxQty,3)} kg)`);return;}
+      onError("");
+      onCommitMilli(parsed);
+     }catch{}
+    }}
+    onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}}}
+    onBlur={()=>{
+     try{
+      const parsed=decimal(draft,3,"Cantidad");
+      if(parsed<=maxQty){setDraft(formatVal(parsed));return;}
+     }catch{}
+     setDraft(formatVal(n));
+    }}
+   />
+   <span className="mono om-pos-kg">kg</span>
+  </label>
+ );
+}
+
 export default function Cart({
  lots,
  catalogHints=[],
@@ -164,6 +262,17 @@ export default function Cart({
     group.push(l);
     index.set(code,group);
    }
+  }
+  return index;
+ },[lots]);
+
+ const barcodeIndex=useMemo(()=>{
+  const index=new Map<string,Option[]>();
+  for(const l of lots){
+   if(!l.barcode)continue;
+   const group=index.get(l.barcode)??[];
+   group.push(l);
+   index.set(l.barcode,group);
   }
   return index;
  },[lots]);
@@ -264,8 +373,8 @@ export default function Cart({
  };
 
  const pickLotOrFast=(lot:Option,pref?:string)=>{
-  if(fast&&lot.unit==="UNIT"){
-   add(lot.id,"1");
+  if(fast){
+   add(lot.id,pref??(decoded?fixed(BigInt(decoded.quantityMilli),3):"1"));
    return;
   }
   setSelected(lot.id);
@@ -277,13 +386,54 @@ export default function Cart({
   quantityRef.current?.focus();
  };
 
+ const tryAutoScan=(raw:string)=>{
+  const trimmed=raw.trim();
+  if(!fast||!trimmed)return false;
+  const w=decodeWeight(trimmed,weightPrefix);
+  if(w){
+   const candidates=lots.filter(l=>l.unit==="KG"&&l.weightCode===w.plu);
+   const reqWeight=BigInt(w.quantityMilli);
+   const fefoLot=candidates.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>=reqWeight)??candidates[0];
+   if(fefoLot){
+    setScanOpen(false);
+    addProductFEFO(fefoLot.productId,fixed(reqWeight,3));
+    return true;
+   }
+   return false;
+  }
+  if(trimmed.length>=6){
+   const bMatches=barcodeIndex.get(trimmed)??[];
+   const bPids=new Set(bMatches.map(l=>l.productId));
+   if(bMatches.length>=1&&bPids.size===1){
+    const hasPrefixExtension=lots.some(l=>l.barcode&&l.barcode!==trimmed&&l.barcode.startsWith(trimmed));
+    if(!hasPrefixExtension){
+     setScanOpen(false);
+     addProductFEFO(bMatches[0].productId,"1");
+     return true;
+    }
+   }
+  }
+  return false;
+ };
+
  const choose=(fromKeyboard=false)=>{
   setInfo("");
+  const trimmed=search.trim();
+  if(!trimmed){
+   setError("");
+   scanRef.current?.focus();
+   return;
+  }
   if(decoded){
    const candidates=matches;
    const reqWeight=BigInt(decoded.quantityMilli);
    const fefoLot=candidates.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>=reqWeight)??candidates[0];
    if(fefoLot){
+    if(fast){
+     setScanOpen(false);
+     addProductFEFO(fefoLot.productId,fixed(reqWeight,3));
+     return;
+    }
     setSelected(fefoLot.id);
     setQty(fixed(reqWeight,3));
     setError("");
@@ -295,20 +445,19 @@ export default function Cart({
    }
    return;
   }
-  if(weightPrefix&&search.trim().startsWith(weightPrefix)&&search.trim().length===13){
+  if(weightPrefix&&trimmed.startsWith(weightPrefix)&&trimmed.length===13){
    setSelected("");
    setQty("");
    setError("Código de peso inválido");
    return;
   }
-  const trimmed=search.trim();
   const exact=exactIndex.get(trimmed)??[];
   const productIds=new Set(exact.map(l=>l.productId));
   if(exact.length>=1&&productIds.size===1){
    const firstAvailable=exact.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>0n)??exact[0];
    const isExactLotCode=exact.length===1&&exact[0].code===trimmed;
    setScanOpen(false);
-   if(fast&&firstAvailable.unit==="UNIT"){
+   if(fast){
     if(isExactLotCode)add(firstAvailable.id,"1");
     else addProductFEFO(firstAvailable.productId,"1");
     return;
@@ -326,7 +475,7 @@ export default function Cart({
    const onlyLot=matches.find(l=>BigInt(l.quantity)-BigInt(cart[l.id]??"0")>0n)??matches[0];
    if(onlyLot){
     setScanOpen(false);
-    if(fast&&onlyLot.unit==="UNIT"){
+    if(fast){
      addProductFEFO(onlyLot.productId,"1");
      return;
     }
@@ -494,7 +643,7 @@ export default function Cart({
 
  const selectQuick=(l:Option)=>{
   const choices=lots.filter(x=>x.productId===l.productId);
-  if(fast&&l.unit==="UNIT"){
+  if(fast){
    addProductFEFO(l.productId,"1");
    return;
   }
@@ -566,6 +715,7 @@ export default function Cart({
           onBlur={()=>setTimeout(()=>setScanOpen(false),150)}
           onChange={e=>{
            const val=e.target.value;
+           if(tryAutoScan(val))return;
            setSearch(val);
            setSelected("");
            setInfo("");
@@ -694,7 +844,7 @@ export default function Cart({
       <label className="om-pos-fasttoggle">
        <input type="checkbox" checked={fast} onChange={e=>{setFast(e.target.checked);scanRef.current?.focus();}}/>
        <span>Escaneo rápido</span>
-       <small>1 clic / Enter suma por FEFO</small>
+       <small>Agrega directo al ticket (editable en la lista)</small>
       </label>
       {weightPrefix&&(
        <span className="status AVAILABLE">Balanza {weightPrefix}</span>
@@ -723,6 +873,11 @@ export default function Cart({
        items={lotPickerItems}
        value={selected}
        onChange={id=>{
+        if(!id){setSelected("");return;}
+        if(fast){
+         add(id,decoded?fixed(BigInt(decoded.quantityMilli),3):"1");
+         return;
+        }
         setSelected(id);
         setQty(decoded?fixed(BigInt(decoded.quantityMilli),3):byId.get(id)?.unit==="KG"?"":"1");
        }}
@@ -919,33 +1074,18 @@ export default function Cart({
            )}
           </div>
           <div className="om-pos-line__qty">
-           {lot.unit==="UNIT"?(
-            <div className="qtybuttons">
-             <button
-              type="button"
-              className="secondary"
-              aria-label={"Restar una unidad de "+lot.name}
-              onClick={()=>{
-               if(n<=1000n){const next={...cart};delete next[lot.id];setCart(next);}
-               else setCart({...cart,[lot.id]:(n-1000n).toString()});
-              }}
-             >
-              −
-             </button>
-             <strong>{(n/1000n).toString()}</strong>
-             <button
-              type="button"
-              className="secondary"
-              aria-label={"Sumar una unidad de "+lot.name}
-              disabled={n+1000n>BigInt(lot.quantity)}
-              onClick={()=>add(lot.id,"1")}
-             >
-              +
-             </button>
-            </div>
-           ):(
-            <span className="mono om-pos-kg">{fixed(n,3)} kg</span>
-           )}
+           <TicketQtyEditor
+            lot={lot}
+            n={n}
+            onStepMinus={()=>{
+             if(n<=1000n){const next={...cart};delete next[lot.id];setCart(next);}
+             else setCart({...cart,[lot.id]:(n-1000n).toString()});
+            }}
+            onStepPlus={()=>add(lot.id,"1")}
+            onCommitMilli={nextMilli=>setCart({...cart,[lot.id]:nextMilli.toString()})}
+            onRemove={()=>{const next={...cart};delete next[lot.id];setCart(next);}}
+            onError={setError}
+           />
           </div>
           <div className="om-pos-line__price">
            <strong className="mono">{money(lineTotal)}</strong>
