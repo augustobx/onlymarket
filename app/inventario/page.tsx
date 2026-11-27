@@ -7,7 +7,7 @@ import {localDay} from "../../src/domain/parse.mjs";
 import {receiveAction,reviewAction} from "../actions";
 import {Operation} from "../operations";
 import {Shell,Field,Notice,money,amount,states,sectors} from "../ui";
-import {PageHeader,SectionCard,EmptyState,formatMoney} from "../components/retail-ui";
+import {PageHeader,SectionCard,EmptyState,InfoCallout,formatMoney} from "../components/retail-ui";
 import {Icon} from "../components/icons";
 import {SearchPicker,type SearchPickerItem} from "../components/search-picker";
 import {lotOperationAction} from "./actions";
@@ -168,9 +168,14 @@ export default async function Page({
          </Field>
          <Field label="Código de lote"><input name="code" required/></Field>
          <Field label="Cantidad (kg o unidades)"><input name="quantity" inputMode="decimal" required/></Field>
-         <Field label="Costo total ($)"><input name="cost" inputMode="decimal" required/></Field>
+         <Field label="Costo total del lote ($)"><input name="cost" inputMode="decimal" required/></Field>
          <Field label="Vencimiento"><input type="date" name="expiresOn" min={today}/></Field>
          <Field label="Comprobante"><input name="invoiceRef"/></Field>
+         <div style={{gridColumn:"1 / -1"}}>
+          <InfoCallout icon="info">
+           Ingresá lo que pagaste al proveedor por todo el lote recibido (no el precio de venta al público ni el costo por unidad).
+          </InfoCallout>
+         </div>
          <button>Registrar recepción</button>
         </form>
        )}

@@ -44,20 +44,28 @@ export default function Purchase({
  const set=(i:number,k:keyof Line,v:string)=>setLines(old=>old.map((l,j)=>i===j?{...l,[k]:v}:l));
 
  let sum=0n;
- let valid=false;
  let invoice:bigint|null=null;
- for(const l of lines){try{sum+=decimal(l.cost,2,"Costo",{allowZero:true});}catch{}}
- try{
-  invoice=decimal(total,2,"Total",{allowZero:true});
-  valid=invoice===sum&&lines.every(l=>{
-   const p=products.find(p=>p.id===l.productId);
-   const qty=decimal(l.quantity,3,"Cantidad");
-   decimal(l.cost,2,"Costo",{allowZero:true});
-   return !!p&&!!l.code.trim()&&(p.unit!=="UNIT"||qty%1000n===0n)&&(!["DELI","BUTCHERY"].includes(p.sector)||!!l.expiresOn)&&(!l.expiresOn||l.expiresOn>today);
-  });
- }catch{}
-
+ const reasons:string[]=[];
+ const lineOk=lines.map((l,i)=>{
+  const tag=`Renglón ${i+1}`;
+  const p=products.find(p=>p.id===l.productId);
+  if(!p)reasons.push(`${tag}: elegí un producto.`);
+  if(!l.code.trim())reasons.push(`${tag}: ingresá el código de lote.`);
+  let qty:bigint|null=null;
+  try{qty=decimal(l.quantity,3,"Cantidad");}catch{reasons.push(`${tag}: ingresá una cantidad válida.`);}
+  if(p&&qty!==null&&p.unit==="UNIT"&&qty%1000n!==0n)reasons.push(`${tag}: este producto se vende por unidad (sin decimales).`);
+  let cost:bigint|null=null;
+  try{cost=decimal(l.cost,2,"Costo",{allowZero:true});sum+=cost;}catch{reasons.push(`${tag}: ingresá el costo total del lote ($).`);}
+  if(p&&["DELI","BUTCHERY"].includes(p.sector)&&!l.expiresOn)reasons.push(`${tag}: Carnicería y Fiambrería requieren vencimiento.`);
+  if(l.expiresOn&&l.expiresOn<=today)reasons.push(`${tag}: el vencimiento debe ser posterior a hoy.`);
+  return !!p&&!!l.code.trim()&&qty!==null&&(p.unit!=="UNIT"||qty%1000n===0n)&&cost!==null&&(!["DELI","BUTCHERY"].includes(p.sector)||!!l.expiresOn)&&(!l.expiresOn||l.expiresOn>today);
+ });
+ try{invoice=decimal(total,2,"Total",{allowZero:true});}catch{reasons.unshift("Ingresá el «Total del comprobante ($)».");}
  const diff=invoice===null?null:invoice-sum;
+ if(invoice!==null&&diff!==null&&diff!==0n){
+  reasons.unshift(`El Total del comprobante ($ ${fmt(invoice)}) debe coincidir con la suma de los costos de lote ($ ${fmt(sum)}). Diferencia: $ ${fmt(diff<0n?-diff:diff)}.`);
+ }
+ const valid=invoice!==null&&diff===0n&&lineOk.every(Boolean);
 
  return (
   <form action={purchaseAction} className="v2-station-form">
@@ -204,8 +212,17 @@ export default function Purchase({
       </div>
 
       <InfoCallout icon="info" tone="warning">
-       El importe de cada renglón corresponde al <strong>costo total del lote</strong>, no al costo unitario.
+       En cada renglón va el <strong>costo total que pagaste por el lote</strong> (no el costo unitario ni el precio de venta al público). El botón se habilita cuando todos los datos están completos y la suma de los lotes coincide exacto con el <strong>Total del comprobante</strong> ($ 0,00 de diferencia).
       </InfoCallout>
+
+      {!valid&&reasons.length>0&&(
+       <div className="om-callout om-callout--warning" role="status" style={{flexDirection:"column",gap:6}}>
+        <strong>Por qué no se habilita el botón:</strong>
+        <ul style={{margin:0,paddingLeft:18}}>
+         {reasons.slice(0,5).map((r,idx)=><li key={idx}>{r}</li>)}
+        </ul>
+       </div>
+      )}
 
       <Submit valid={valid}/>
       <small style={{display:"block",marginTop:8}}>El servidor valida vencimientos y suma total antes de grabar.</small>

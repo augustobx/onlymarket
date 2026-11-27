@@ -31,9 +31,9 @@ export function parseCatalogCsv(text){
   try{
    if(r.length!==header.length)throw new Error("Cantidad de columnas inválida");
    const [sku,name,barcode,unit,sector,price,alert,fresh,opened]=r;
-   const id=textField(sku,"SKU",64),code=textField(barcode,"Código de barras",64,true)||null;
-   if(skus.has(id)||code&&codes.has(code))throw new Error("SKU o código de barras duplicado en archivo");
-   skus.add(id);if(code)codes.add(code);
+   const id=textField(sku,"SKU",64,true),code=textField(barcode,"Código de barras",64,true)||null;
+   if((id&&skus.has(id))||(code&&codes.has(code)))throw new Error("SKU o código de barras duplicado en archivo");
+   if(id)skus.add(id);if(code)codes.add(code);
    const u=unit.trim().toUpperCase(),s=sectors[sector.trim().toUpperCase()];
    if(!["KG","UNIT","UNIDAD"].includes(u)||!s)throw new Error("Unidad o sector inválido");
    return {sku:id,name:textField(name,"Nombre"),barcode:code,unit:u==="KG"?"KG":"UNIT",sector:s,salePriceCents:decimal(price,2,"Precio",{allowZero:true}),alertDays:days(alert,false),freshnessDays:days(fresh,true),openedLifeDays:days(opened,true)};

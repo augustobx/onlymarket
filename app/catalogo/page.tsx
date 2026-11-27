@@ -4,7 +4,7 @@ import {db} from "../../src/server/db";
 import {requireSession} from "../../src/server/auth";
 import {addProduct,editProduct,bulkPrice} from "../actions";
 import {Shell,Field,Notice,sectors,fixed,amount,states} from "../ui";
-import {PageHeader,KpiCard,SectionCard,EmptyState,formatMoney,sectorIcons} from "../components/retail-ui";
+import {PageHeader,KpiCard,SectionCard,EmptyState,InfoCallout,formatMoney,sectorIcons} from "../components/retail-ui";
 import {Icon} from "../components/icons";
 import {localDay} from "../../src/domain/parse.mjs";
 import {classifyLot} from "../../src/domain/inventory.mjs";
@@ -97,7 +97,7 @@ export default async function Page({
       <Operation title="Nuevo producto" trigger="+ Nuevo producto" wide>
        <form action={addProduct} className="formgrid">
         <Field label="Nombre"><input name="name" required maxLength={120}/></Field>
-        <Field label="SKU"><input name="sku" required maxLength={64}/></Field>
+        <Field label="SKU (opcional)"><input name="sku" maxLength={64} placeholder="Automático si queda vacío"/></Field>
         <Field label="Código de barras"><input name="barcode" maxLength={64}/></Field>
         <Field label="Sector">
          <select name="sector">
@@ -111,7 +111,7 @@ export default async function Page({
          </select>
         </Field>
         <Field label="PLU de peso (5 dígitos, opcional)"><input name="weightCode" pattern="[0-9]{5}" maxLength={5}/></Field>
-        <Field label="Precio de venta por unidad/kg ($)"><input name="price" inputMode="decimal" required defaultValue="0"/></Field>
+        <Field label="Precio de venta al público por unidad/kg ($)"><input name="price" inputMode="decimal" required defaultValue="0"/></Field>
         <Field label="Avisar antes de vencer (días)"><input name="alertDays" type="number" min="0" max="365" required defaultValue="3"/></Field>
         <Field label="Revisar frescura después de (días)"><input name="freshnessDays" type="number" min="1" max="365"/></Field>
         <Field label="Vida útil tras apertura (días)"><input name="openedLifeDays" type="number" min="1" max="365"/></Field>
@@ -121,6 +121,11 @@ export default async function Page({
           <option value="yes">Sí (fijar en grilla rápida)</option>
          </select>
         </Field>
+        <div style={{gridColumn:"1 / -1"}}>
+         <InfoCallout icon="info">
+          El producto nace con stock 0. Acá definís el <strong>precio de venta al público</strong>; cuando cargues stock en <strong>Compras y recepción</strong> te va a pedir el <strong>costo total pagado por el lote</strong> (no tiene que coincidir con el precio de venta), y el botón de compra se habilita cuando la suma de los lotes coincide con el total del comprobante.
+         </InfoCallout>
+        </div>
         <button>Crear producto</button>
        </form>
       </Operation>
@@ -281,7 +286,7 @@ export default async function Page({
               <input type="hidden" name="id" value={p.id}/>
               <div className="v2-fields">
                <Field label="Nombre"><input name="name" defaultValue={p.name} required/></Field>
-               <Field label="SKU"><input name="sku" defaultValue={p.sku} required/></Field>
+               <Field label="SKU (opcional)"><input name="sku" defaultValue={p.sku} maxLength={64} placeholder="Se mantiene si queda vacío"/></Field>
                <Field label="Código de barras"><input name="barcode" defaultValue={p.barcode??""}/></Field>
                <Field label="Sector">
                 <select name="sector" defaultValue={p.sector}>

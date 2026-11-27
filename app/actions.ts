@@ -1,6 +1,7 @@
 "use server";
 import {redirect} from "next/navigation";
 import {revalidatePath} from "next/cache";
+import {randomUUID} from "node:crypto";
 import {licenseActive} from "../src/domain/settings.mjs";
 import {db} from "../src/server/db";
 import {login,logout,requireSession} from "../src/server/auth";
@@ -36,7 +37,7 @@ export async function logoutAction(){await logout();redirect("/login");}
 export async function addProduct(f:FormData){
  const s=await manager();
  await write("/catalogo","product_created",async()=>{
-  const sku=textField(str(f,"sku"),"SKU",64),name=textField(str(f,"name"),"Nombre");
+  const sku=textField(str(f,"sku"),"SKU",64,true)||`SKU-${randomUUID().slice(0,8).toUpperCase()}`,name=textField(str(f,"name"),"Nombre");
   const barcode=textField(str(f,"barcode"),"Código de barras",64,true)||null;
   const unit=str(f,"unit"),sector=str(f,"sector"),weightCode=str(f,"weightCode")||null;
   if(weightCode&&(unit!=="KG"||!/^\d{5}$/.test(weightCode)))throw new Error("PLU de peso: 5 dígitos y producto por kg");
@@ -110,7 +111,7 @@ export async function reviewAction(f:FormData){
 export async function editProduct(f:FormData){
  const s=await manager();
  await write("/catalogo","product_updated",async()=>{
-  const id=textField(str(f,"id"),"Producto"),name=textField(str(f,"name"),"Nombre"),sku=textField(str(f,"sku"),"SKU",64);
+  const id=textField(str(f,"id"),"Producto"),name=textField(str(f,"name"),"Nombre"),rawSku=textField(str(f,"sku"),"SKU",64,true);
   const barcode=textField(str(f,"barcode"),"Código de barras",64,true)||null;
   const price=decimal(str(f,"price"),2,"Precio",{allowZero:true});
   const rawSector=str(f,"sector");
@@ -119,6 +120,7 @@ export async function editProduct(f:FormData){
   await db.$transaction(async tx=>{
     await authorize(tx,s);
     const p=await tx.product.findUnique({where:{tenantId_id:{tenantId:s.tenantId,id}}});if(!p)throw new Error("Producto inexistente");
+    const sku=rawSku||p.sku;
     const sector=(rawSector||p.sector) as "BUTCHERY"|"DELI"|"PRODUCE"|"GROCERY"|"OTHER";
     const quickAccess=f.has("quickAccess")?str(f,"quickAccess")==="yes":p.quickAccess;
     const weightCode=str(f,"weightCode")||null;if(weightCode&&(p.unit!=="KG"||!/^\d{5}$/.test(weightCode)))throw new Error("PLU de peso: 5 dígitos y producto por kg");

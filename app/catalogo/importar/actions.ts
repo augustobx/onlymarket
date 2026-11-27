@@ -1,4 +1,5 @@
 "use server";
+import {randomUUID} from "node:crypto";
 import {db} from "../../../src/server/db";
 import {requireSession} from "../../../src/server/auth";
 import {parseCatalogCsv} from "../../../src/domain/catalog-import.mjs";
@@ -14,7 +15,7 @@ export async function importCatalog(f:FormData){
   const items=parseCatalogCsv(raw);
   count=await serial(db,async (tx:Prisma.TransactionClient)=>{
    await authorizeSale(tx,s,["OWNER","MANAGER"]);
-   const result=await tx.product.createMany({data:items.map((p):Prisma.ProductCreateManyInput=>{if(p.alertDays===null)throw new Error("Aviso obligatorio");return {sku:p.sku,name:p.name,barcode:p.barcode,unit:p.unit==="KG"?"KG":"UNIT",sector:p.sector,salePriceCents:p.salePriceCents,alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,tenantId:s.tenantId};})});
+   const result=await tx.product.createMany({data:items.map((p):Prisma.ProductCreateManyInput=>{if(p.alertDays===null)throw new Error("Aviso obligatorio");return {sku:p.sku||`SKU-${randomUUID().slice(0,8).toUpperCase()}`,name:p.name,barcode:p.barcode,unit:p.unit==="KG"?"KG":"UNIT",sector:p.sector,salePriceCents:p.salePriceCents,alertDays:p.alertDays,freshnessDays:p.freshnessDays,openedLifeDays:p.openedLifeDays,tenantId:s.tenantId};})});
    return result.count;
   });
  }catch(e){error=e&&typeof e==="object"&&"code" in e&&e.code==="P2002"?"Ya existe un SKU o código de barras. No se importó ningún producto.":e instanceof Error&&!('code' in e)&&e.message.length<220&&!e.message.includes("\n")?e.message:"No se pudo importar el catálogo";}
