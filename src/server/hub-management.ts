@@ -20,8 +20,8 @@ const RESERVED_SLUGS = new Set([
 let schemaReady = false;
 async function ensureHubSchema() {
   if (schemaReady) return;
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "HubPlan" (
+  const ddlStatements = [
+    `CREATE TABLE IF NOT EXISTS "HubPlan" (
       "id" TEXT PRIMARY KEY,
       "code" TEXT UNIQUE NOT NULL,
       "name" TEXT NOT NULL,
@@ -32,8 +32,8 @@ async function ensureHubSchema() {
       "modules" JSONB NOT NULL DEFAULT '{}'::jsonb,
       "limits" JSONB NOT NULL DEFAULT '{"maxBranches":5,"maxUsers":20}'::jsonb,
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    CREATE TABLE IF NOT EXISTS "HubSubscription" (
+    )`,
+    `CREATE TABLE IF NOT EXISTS "HubSubscription" (
       "tenantId" TEXT PRIMARY KEY REFERENCES "Tenant"("id") ON DELETE CASCADE,
       "planId" TEXT NOT NULL REFERENCES "HubPlan"("id"),
       "status" TEXT NOT NULL DEFAULT 'ACTIVE',
@@ -41,16 +41,16 @@ async function ensureHubSchema() {
       "periodEnd" TIMESTAMPTZ NOT NULL DEFAULT now() + interval '30 days',
       "trialEndsAt" TIMESTAMPTZ,
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    CREATE TABLE IF NOT EXISTS "HubFeatureOverride" (
+    )`,
+    `CREATE TABLE IF NOT EXISTS "HubFeatureOverride" (
       "tenantId" TEXT NOT NULL REFERENCES "Tenant"("id") ON DELETE CASCADE,
       "key" TEXT NOT NULL,
       "enabled" BOOLEAN,
       "limitValue" INTEGER,
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY ("tenantId", "key")
-    );
-    CREATE TABLE IF NOT EXISTS "HubPayment" (
+    )`,
+    `CREATE TABLE IF NOT EXISTS "HubPayment" (
       "id" TEXT PRIMARY KEY,
       "tenantId" TEXT NOT NULL REFERENCES "Tenant"("id") ON DELETE CASCADE,
       "amountCents" INTEGER NOT NULL,
@@ -64,8 +64,8 @@ async function ensureHubSchema() {
       "dueAt" TIMESTAMPTZ,
       "paidAt" TIMESTAMPTZ,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    CREATE TABLE IF NOT EXISTS "HubAuditLog" (
+    )`,
+    `CREATE TABLE IF NOT EXISTS "HubAuditLog" (
       "id" TEXT PRIMARY KEY,
       "tenantId" TEXT,
       "actor" TEXT,
@@ -74,8 +74,11 @@ async function ensureHubSchema() {
       "entityId" TEXT,
       "details" JSONB NOT NULL DEFAULT '{}'::jsonb,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
+    )`,
+  ];
+  for (const ddl of ddlStatements) {
+    await db.$executeRawUnsafe(ddl);
+  }
 
   const defaultModules = Object.fromEntries(MODULES.map((k) => [k, true]));
   const defaults = [
